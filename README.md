@@ -22,9 +22,9 @@ npm run build        # production build to ./dist
 npm run preview      # preview the built app locally
 ```
 
-## ☁️ Deployment — Three options (all free)
+## ☁️ Cloud Deployment (free)
 
-### Option A — Netlify Drop (easiest, NO account setup needed, ~30 seconds)
+### Netlify Drop (easiest, NO account setup needed, ~30 seconds)
 
 1. Run `npm install && npm run build` locally — creates a `dist/` folder
 2. Open https://app.netlify.com/drop
@@ -33,20 +33,6 @@ npm run preview      # preview the built app locally
 
 (Create a free account afterwards to claim the site and get a nicer URL.)
 
-### Option B — Vercel (recommended if you use GitHub)
-
-1. Push this project to GitHub
-2. Go to https://vercel.com/new
-3. Import the repository
-4. Vercel auto-detects Vite via `vercel.json` — click **Deploy**
-5. Live in ~60 seconds at `https://your-project.vercel.app`
-
-### Option C — GitHub Pages
-
-1. Push to GitHub
-2. Add `base: '/your-repo-name/'` to `vite.config.js`
-3. `npm run build`
-4. Deploy `dist/` to a `gh-pages` branch (use the [`gh-pages`](https://www.npmjs.com/package/gh-pages) npm package)
 
 ## 📁 Project structure
 

@@ -1,32 +1,34 @@
 // Seed data extracted from Anushree_Electrical_Attendance_2026.xlsx
 // All values are editable from the UI — edits persist in localStorage.
 
+const NO_DOCS = { aadhar: false, pan: false };
+
 export const SEED_EMPLOYEES = [
   // Firm 1 — Electrical Engineers
-  { id: 1,  name: 'Sumit Verma',    guardian: 'Mr. Subhas Chand',    firm: 'Electrical Engineers',       salary: 17000, esi: true,  bonus: false },
-  { id: 2,  name: 'Sajid',          guardian: 'Mr. Sagir Ahmed',     firm: 'Electrical Engineers',       salary: 17000, esi: true,  bonus: false },
-  { id: 3,  name: 'Shane Allam',    guardian: 'Mohd. Ahmed',         firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false },
-  { id: 4,  name: 'Mohd. Tabrez',   guardian: 'Mohd. Anes',          firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false },
-  { id: 5,  name: 'Salman',         guardian: 'Mohd. Yatik',         firm: 'Electrical Engineers',       salary: 16000, esi: true,  bonus: false },
-  { id: 6,  name: 'Mohd. Shanawaz', guardian: 'Mohd. Saleem',        firm: 'Electrical Engineers',       salary: 15500, esi: true,  bonus: false },
-  { id: 7,  name: 'Naeem',          guardian: 'Mohd. Saleem',        firm: 'Electrical Engineers',       salary: 15500, esi: true,  bonus: false },
-  { id: 8,  name: 'Imran',          guardian: 'Mohd. Shabhuddin',    firm: 'Electrical Engineers',       salary: 15500, esi: true,  bonus: false },
-  { id: 9,  name: 'Amiit',          guardian: 'Mr. Sripal',          firm: 'Electrical Engineers',       salary: 15000, esi: true,  bonus: false },
-  { id: 10, name: 'Anil Kumar',     guardian: 'Mr. Ram Sharan',      firm: 'Electrical Engineers',       salary: 19500, esi: true,  bonus: false },
-  { id: 11, name: 'Naseeb Ahmd',    guardian: 'Mr. Vazi Ahmed',      firm: 'Electrical Engineers',       salary: 14000, esi: true,  bonus: false },
-  { id: 12, name: 'Sapna',          guardian: 'Mr. Lokesh Kumar',    firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false },
-  { id: 13, name: 'Maneesha Garg',  guardian: 'Mr. Vishal Garg',     firm: 'Electrical Engineers',       salary: 25000, esi: false, bonus: true  },
-  { id: 14, name: 'Vandana Sharma', guardian: 'Mr. Vinay Sharma',    firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false },
-  { id: 15, name: 'Nand Lal',       guardian: 'Mr. Nack Chedi',      firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false },
+  { id: 1,  name: 'Sumit Verma',    guardian: 'Mr. Subhas Chand',    firm: 'Electrical Engineers',       salary: 17000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 2,  name: 'Sajid',          guardian: 'Mr. Sagir Ahmed',     firm: 'Electrical Engineers',       salary: 17000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 3,  name: 'Shane Allam',    guardian: 'Mohd. Ahmed',         firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 4,  name: 'Mohd. Tabrez',   guardian: 'Mohd. Anes',          firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 5,  name: 'Salman',         guardian: 'Mohd. Yatik',         firm: 'Electrical Engineers',       salary: 16000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 6,  name: 'Mohd. Shanawaz', guardian: 'Mohd. Saleem',        firm: 'Electrical Engineers',       salary: 15500, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 7,  name: 'Naeem',          guardian: 'Mohd. Saleem',        firm: 'Electrical Engineers',       salary: 15500, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 8,  name: 'Imran',          guardian: 'Mohd. Shabhuddin',    firm: 'Electrical Engineers',       salary: 15500, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 9,  name: 'Amiit',          guardian: 'Mr. Sripal',          firm: 'Electrical Engineers',       salary: 15000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 10, name: 'Anil Kumar',     guardian: 'Mr. Ram Sharan',      firm: 'Electrical Engineers',       salary: 19500, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 11, name: 'Naseeb Ahmd',    guardian: 'Mr. Vazi Ahmed',      firm: 'Electrical Engineers',       salary: 14000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 12, name: 'Sapna',          guardian: 'Mr. Lokesh Kumar',    firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 13, name: 'Maneesha Garg',  guardian: 'Mr. Vishal Garg',     firm: 'Electrical Engineers',       salary: 25000, esi: false, bonus: true,  docs: NO_DOCS },
+  { id: 14, name: 'Vandana Sharma', guardian: 'Mr. Vinay Sharma',    firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 15, name: 'Nand Lal',       guardian: 'Mr. Nack Chedi',      firm: 'Electrical Engineers',       salary: 20000, esi: true,  bonus: false, docs: NO_DOCS },
   // Firm 2 — Electrical Engineers India
-  { id: 16, name: 'Imran',          guardian: 'Mohd. Ifran',         firm: 'Electrical Engineers India', salary: 21000, esi: true,  bonus: false },
-  { id: 17, name: 'Anil',           guardian: 'Mr. Pratap Singh',    firm: 'Electrical Engineers India', salary: 21000, esi: true,  bonus: false },
-  { id: 18, name: 'Poonam',         guardian: 'Mr. Mukesh Singh',    firm: 'Electrical Engineers India', salary: 12150, esi: true,  bonus: false },
-  { id: 19, name: 'Faeem',          guardian: 'Mohd. Haji Yaseen',   firm: 'Electrical Engineers India', salary: 16000, esi: true,  bonus: false },
-  { id: 20, name: 'Tej Pal',        guardian: 'Mr. Nathu Singh',     firm: 'Electrical Engineers India', salary: 13000, esi: true,  bonus: false },
-  { id: 21, name: 'Kapil',          guardian: 'Mr. Jay Singh',       firm: 'Electrical Engineers India', salary: 16000, esi: true,  bonus: false },
-  { id: 22, name: 'Sheela',         guardian: 'Mr. Bhram Singh',     firm: 'Electrical Engineers India', salary: 12150, esi: true,  bonus: false },
-  { id: 23, name: 'Mohd. Sajid',    guardian: 'Mohd. Islamuddin',    firm: 'Electrical Engineers India', salary: 15000, esi: true,  bonus: false },
+  { id: 16, name: 'Imran',          guardian: 'Mohd. Ifran',         firm: 'Electrical Engineers India', salary: 21000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 17, name: 'Anil',           guardian: 'Mr. Pratap Singh',    firm: 'Electrical Engineers India', salary: 21000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 18, name: 'Poonam',         guardian: 'Mr. Mukesh Singh',    firm: 'Electrical Engineers India', salary: 12150, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 19, name: 'Faeem',          guardian: 'Mohd. Haji Yaseen',   firm: 'Electrical Engineers India', salary: 16000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 20, name: 'Tej Pal',        guardian: 'Mr. Nathu Singh',     firm: 'Electrical Engineers India', salary: 13000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 21, name: 'Kapil',          guardian: 'Mr. Jay Singh',       firm: 'Electrical Engineers India', salary: 16000, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 22, name: 'Sheela',         guardian: 'Mr. Bhram Singh',     firm: 'Electrical Engineers India', salary: 12150, esi: true,  bonus: false, docs: NO_DOCS },
+  { id: 23, name: 'Mohd. Sajid',    guardian: 'Mohd. Islamuddin',    firm: 'Electrical Engineers India', salary: 15000, esi: true,  bonus: false, docs: NO_DOCS },
 ];
 
 export const SEED_HOLIDAYS = [

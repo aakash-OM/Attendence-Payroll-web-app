@@ -1,10 +1,18 @@
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, X } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, FileText } from 'lucide-react';
 import { formatINR } from '../payroll';
 
 const EMPTY = {
   id: null, name: '', guardian: '', firm: '', salary: 15000, esi: true, bonus: false,
+  docs: { aadhar: false, pan: false },
 };
+
+function docIconStyle(emp) {
+  const count = (emp.docs?.aadhar ? 1 : 0) + (emp.docs?.pan ? 1 : 0);
+  if (count === 2) return { color: '#39ff14', filter: 'drop-shadow(0 0 5px #39ff14)' };
+  if (count === 1) return { color: '#ff8c00', filter: 'drop-shadow(0 0 5px #ff8c00)' };
+  return { color: 'var(--text-faint)', filter: 'none' };
+}
 
 export default function Employees({ employees, setEmployees, attendance, setAttendance }) {
   const [editing, setEditing] = useState(null); // employee or null
@@ -100,7 +108,12 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
                 {list.map((emp, i) => (
                   <tr key={emp.id}>
                     <td className="faint mono">{i + 1}</td>
-                    <td style={{ fontWeight: 500 }}>{emp.name}</td>
+                    <td style={{ fontWeight: 500 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <FileText size={13} style={{ flexShrink: 0, ...docIconStyle(emp) }} title={`Aadhaar: ${emp.docs?.aadhar ? '✓' : '✗'}  PAN: ${emp.docs?.pan ? '✓' : '✗'}`} />
+                        {emp.name}
+                      </span>
+                    </td>
                     <td className="muted">{emp.guardian}</td>
                     <td className="num">{formatINR(emp.salary)}</td>
                     <td>
@@ -197,6 +210,32 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
               />
               <span>Bonus applicable <span className="faint mono" style={{ fontSize: 11 }}>(8.33% added)</span></span>
             </label>
+
+            <div style={{ borderTop: '1px solid var(--border)', margin: '12px 0 8px', paddingTop: 12 }}>
+              <div style={{ fontSize: 11, color: 'var(--text-faint)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>Documents</div>
+              <label className="switch-row">
+                <input
+                  type="checkbox"
+                  checked={editing.docs?.aadhar || false}
+                  onChange={(e) => setEditing({ ...editing, docs: { ...(editing.docs || {}), aadhar: e.target.checked } })}
+                />
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FileText size={13} style={{ color: editing.docs?.aadhar ? '#39ff14' : 'var(--text-faint)', filter: editing.docs?.aadhar ? 'drop-shadow(0 0 5px #39ff14)' : 'none' }} />
+                  Aadhaar Card uploaded
+                </span>
+              </label>
+              <label className="switch-row">
+                <input
+                  type="checkbox"
+                  checked={editing.docs?.pan || false}
+                  onChange={(e) => setEditing({ ...editing, docs: { ...(editing.docs || {}), pan: e.target.checked } })}
+                />
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <FileText size={13} style={{ color: editing.docs?.pan ? '#39ff14' : 'var(--text-faint)', filter: editing.docs?.pan ? 'drop-shadow(0 0 5px #39ff14)' : 'none' }} />
+                  PAN Card uploaded
+                </span>
+              </label>
+            </div>
 
             <div className="modal-actions">
               <button className="btn" onClick={close}>Cancel</button>

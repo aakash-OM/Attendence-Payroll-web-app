@@ -439,3 +439,5 @@ table.tbl .grand-total td {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-faint); }
+
+@keyframes spin { to { transform: rotate(360deg); } }

@@ -25,6 +25,7 @@ export default function App() {
   const [employees,  setEmployees]  = useState(null);
   const [holidays,   setHolidays]   = useState(null);
   const [attendance, setAttendance] = useState(null);
+  const [documents,  setDocuments]  = useState(null);
   const [year,     setYear]     = useState(ui.year     || 2026);
   const [monthIdx, setMonthIdx] = useState(ui.monthIdx ?? 2);
   const [loading,  setLoading]  = useState(true);
@@ -38,9 +39,9 @@ export default function App() {
 
   // Real-time Firestore listeners — all team members see the same data instantly
   useEffect(() => {
-    const loaded = { emp: false, hol: false, att: false };
+    const loaded = { emp: false, hol: false, att: false, doc: false };
     const check = () => {
-      if (loaded.emp && loaded.hol && loaded.att) setLoading(false);
+      if (loaded.emp && loaded.hol && loaded.att && loaded.doc) setLoading(false);
     };
 
     const unsubs = [
@@ -73,6 +74,16 @@ export default function App() {
         loaded.att = true;
         check();
       }),
+
+      onSnapshot(doc(db, 'payroll', 'documents'), async (snap) => {
+        if (snap.exists()) {
+          setDocuments(snap.data().map);
+        } else {
+          await setDoc(doc(db, 'payroll', 'documents'), { map: {} });
+        }
+        loaded.doc = true;
+        check();
+      }),
     ];
 
     return () => unsubs.forEach((u) => u());
@@ -95,6 +106,12 @@ export default function App() {
     const next = typeof val === 'function' ? val(attendance) : val;
     setAttendance(next);
     await setDoc(doc(db, 'payroll', 'attendance'), { map: next });
+  };
+
+  const saveDocuments = async (val) => {
+    const next = typeof val === 'function' ? val(documents) : val;
+    setDocuments(next);
+    await setDoc(doc(db, 'payroll', 'documents'), { map: next });
   };
 
   const shiftMonth = (delta) => {
@@ -261,7 +278,7 @@ export default function App() {
         <Attendance employees={employees} holidays={holidays} attendance={attendance} setAttendance={saveAttendance} year={year} monthIdx={monthIdx} />
       )}
       {tab === 'employees' && (
-        <Employees employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} />
+        <Employees employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} documents={documents} setDocuments={saveDocuments} />
       )}
       {tab === 'holidays' && (
         <Holidays holidays={holidays} setHolidays={saveHolidays} year={year} />

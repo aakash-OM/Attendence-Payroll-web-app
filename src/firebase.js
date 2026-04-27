@@ -1,8 +1,7 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
 
-// Replace these values with your Firebase project config
-// (Firebase Console → Project Settings → Your apps → SDK setup)
 const firebaseConfig = {
   apiKey:            "AIzaSyCXO7-oYdwCEm50YG9mSQz9vumWcSjr4Aw",
   authDomain:        "anushree-payroll.firebaseapp.com",
@@ -14,3 +13,4 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
+export const storage = getStorage(app);

@@ -1,7 +1,7 @@
 // Seed data extracted from Anushree_Electrical_Attendance_2026.xlsx
 // All values are editable from the UI — edits persist in localStorage.
 
-const NO_DOCS = { aadhar: false, pan: false };
+const NO_DOCS = { aadhar: null, pan: null };
 
 export const SEED_EMPLOYEES = [
   // Firm 1 — Electrical Engineers

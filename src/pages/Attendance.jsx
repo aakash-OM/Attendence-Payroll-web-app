@@ -1,11 +1,127 @@
-import { useState, useMemo } from 'react';
-import { Check, RotateCcw, Zap } from 'lucide-react';
+import { useState } from 'react';
+import { Check, RotateCcw, Zap, CalendarDays, X } from 'lucide-react';
 import {
   computeMonthPayroll, daysInMonth, monthKey, MONTH_NAMES, formatINR, formatINRExact,
 } from '../payroll';
 
+function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey, attendance, setAttendance, onClose }) {
+  const absentKey = `d${empId}`;
+  const [absentDays, setAbsentDays] = useState(() => new Set(attendance[mKey]?.[absentKey] || []));
+
+  const toggleDay = (day) => {
+    setAbsentDays((prev) => {
+      const next = new Set(prev);
+      if (next.has(day)) next.delete(day); else next.add(day);
+      return next;
+    });
+  };
+
+  const handleApply = () => {
+    const absentArr = [...absentDays].sort((a, b) => a - b);
+    const daysPresent = Math.max(0, total - publicHols - absentArr.length);
+    setAttendance((prev) => ({
+      ...prev,
+      [mKey]: { ...(prev[mKey] || {}), [empId]: daysPresent, [absentKey]: absentArr },
+    }));
+    onClose();
+  };
+
+  const presentCount = Math.max(0, total - publicHols - absentDays.size);
+
+  return (
+    <div
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div style={{ background: 'var(--bg-1)', border: '1px solid var(--border-2)', borderRadius: 14, padding: '22px 20px', width: 370, maxWidth: '94vw', boxShadow: '0 20px 60px rgba(0,0,0,0.6)' }}>
+
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 14 }}>
+          <div>
+            <div style={{ fontWeight: 600, fontSize: 15 }}>{empName}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-faint)', marginTop: 3, letterSpacing: '0.04em' }}>
+              {MONTH_NAMES[monthIdx].toUpperCase()} {year} · CLICK DATE TO MARK ABSENT
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ background: 'none', border: 'none', color: 'var(--text-faint)', cursor: 'pointer', padding: 2, display: 'flex' }}
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Legend */}
+        <div style={{ display: 'flex', gap: 14, marginBottom: 14, fontSize: 11, color: 'var(--text-dim)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(111,174,106,0.35)', border: '1px solid rgba(111,174,106,0.55)', display: 'inline-block' }} />
+            Present
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(212,106,90,0.38)', border: '1px solid rgba(212,106,90,0.6)', display: 'inline-block' }} />
+            Absent
+          </span>
+        </div>
+
+        {/* Day grid */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, marginBottom: 18 }}>
+          {Array.from({ length: total }, (_, i) => i + 1).map((day) => {
+            const absent = absentDays.has(day);
+            return (
+              <button
+                key={day}
+                onClick={() => toggleDay(day)}
+                title={absent ? 'Click to mark present' : 'Click to mark absent'}
+                style={{
+                  padding: '8px 0',
+                  borderRadius: 7,
+                  border: absent
+                    ? '1.5px solid rgba(212,106,90,0.65)'
+                    : '1.5px solid rgba(111,174,106,0.5)',
+                  background: absent
+                    ? 'rgba(212,106,90,0.32)'
+                    : 'rgba(111,174,106,0.25)',
+                  color: absent ? '#e0806e' : '#7ec478',
+                  fontWeight: 700,
+                  fontSize: 13,
+                  cursor: 'pointer',
+                  lineHeight: 1,
+                  transition: 'background 0.12s, border-color 0.12s',
+                }}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Footer */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 12 }}>
+            <span style={{ color: '#e0806e', fontWeight: 600 }}>{absentDays.size} absent</span>
+            <span style={{ color: 'var(--text-faint)', margin: '0 6px' }}>·</span>
+            <span style={{ color: '#7ec478', fontWeight: 600 }}>{presentCount} present</span>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button
+              className="btn btn-sm btn-ghost"
+              onClick={() => setAbsentDays(new Set())}
+              style={{ fontSize: 11 }}
+            >
+              Clear all
+            </button>
+            <button className="btn btn-sm btn-ghost" onClick={onClose}>Cancel</button>
+            <button className="btn btn-sm" onClick={handleApply}>Apply</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Attendance({ employees, holidays, attendance, setAttendance, year, monthIdx }) {
   const [filter, setFilter] = useState('all');
+  const [calModal, setCalModal] = useState(null); // { empId, empName }
   const mKey = monthKey(year, monthIdx);
   const total = daysInMonth(year, monthIdx);
   const publicHols = holidays.filter((h) => {
@@ -68,7 +184,7 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
         </div>
 
         <div className="info-note">
-          Enter <strong>Days Present</strong> for each employee. Salary, ESI, bonus and net-payable
+          Enter <strong>Days Present</strong> for each employee, or click the <CalendarDays size={12} style={{ verticalAlign: 'middle' }} /> calendar icon to mark individual days. Salary, ESI, bonus and net-payable
           recalculate instantly. Holidays are auto-counted from the Holiday Calendar; absent-days =
           <span className="mono"> total − present − holidays</span>.
         </div>
@@ -110,47 +226,71 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
                     <th className="num" style={{ width: 110 }}>Days Present</th>
                     <th className="num">Absent</th>
                     <th className="num">Gross</th>
-                    <th className="num">ESI</th>
+                    <th className="num">Employee ESI</th>
                     <th className="num">Bonus</th>
-                    <th className="num">Net</th>
+                    <th className="num">Net (Gross-Emp.ESI)</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={r.employee.id}>
-                      <td className="faint mono">{i + 1}</td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{r.employee.name}</div>
-                        <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
-                          {r.employee.guardian}
-                        </div>
-                      </td>
-                      <td className="num">{formatINR(r.employee.salary)}</td>
-                      <td className="num">{formatINRExact(r.perDay)}</td>
-                      <td className="num">
-                        <input
-                          type="number"
-                          className="cell-input"
-                          min={0}
-                          max={total}
-                          value={r.daysPresent}
-                          onChange={(e) => updatePresent(r.employee.id, e.target.value)}
-                        />
-                        <span className="faint mono" style={{ fontSize: 10, marginLeft: 4 }}>
-                          /{total}
-                        </span>
-                      </td>
-                      <td className="num" style={{ color: r.daysAbsent > 0 ? 'var(--danger)' : 'var(--text-faint)' }}>
-                        {r.daysAbsent}
-                      </td>
-                      <td className="num">{formatINR(r.grossAfterAbsent)}</td>
-                      <td className="num">{formatINR(r.esiDeduct)}</td>
-                      <td className="num">{r.bonus > 0 ? formatINR(r.bonus) : '—'}</td>
-                      <td className="num" style={{ color: 'var(--accent-2)', fontWeight: 600 }}>
-                        {formatINR(r.netPayable)}
-                      </td>
-                    </tr>
-                  ))}
+                  {rows.map((r, i) => {
+                    const hasCalDays = (attendance[mKey]?.[`d${r.employee.id}`] || []).length > 0;
+                    return (
+                      <tr key={r.employee.id}>
+                        <td className="faint mono">{i + 1}</td>
+                        <td>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                            <button
+                              onClick={() => setCalModal({ empId: r.employee.id, empName: r.employee.name })}
+                              title="Open attendance calendar"
+                              style={{
+                                background: 'none',
+                                border: 'none',
+                                padding: 3,
+                                cursor: 'pointer',
+                                color: hasCalDays ? 'var(--accent)' : 'var(--text-faint)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                flexShrink: 0,
+                                borderRadius: 4,
+                              }}
+                            >
+                              <CalendarDays size={15} />
+                            </button>
+                            <div>
+                              <div style={{ fontWeight: 500 }}>{r.employee.name}</div>
+                              <div className="faint" style={{ fontSize: 11, marginTop: 2 }}>
+                                {r.employee.guardian}
+                              </div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="num">{formatINR(r.employee.salary)}</td>
+                        <td className="num">{formatINRExact(r.perDay)}</td>
+                        <td className="num">
+                          <input
+                            type="number"
+                            className="cell-input"
+                            min={0}
+                            max={total}
+                            value={r.daysPresent}
+                            onChange={(e) => updatePresent(r.employee.id, e.target.value)}
+                          />
+                          <span className="faint mono" style={{ fontSize: 10, marginLeft: 4 }}>
+                            /{total}
+                          </span>
+                        </td>
+                        <td className="num" style={{ color: r.daysAbsent > 0 ? 'var(--danger)' : 'var(--text-faint)' }}>
+                          {r.daysAbsent}
+                        </td>
+                        <td className="num">{formatINR(r.grossAfterAbsent)}</td>
+                        <td className="num">{formatINR(r.esiDeduct)}</td>
+                        <td className="num">{r.bonus > 0 ? formatINR(r.bonus) : '—'}</td>
+                        <td className="num" style={{ color: 'var(--accent-2)', fontWeight: 600 }}>
+                          {formatINR(r.netPayable)}
+                        </td>
+                      </tr>
+                    );
+                  })}
                   <tr className="subtotal">
                     <td colSpan={5}>SUBTOTAL — {firm}</td>
                     <td className="num">{firmTotals.absent}</td>
@@ -186,6 +326,21 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
             </div>
           </div>
         </div>
+      )}
+
+      {calModal && (
+        <CalendarModal
+          empId={calModal.empId}
+          empName={calModal.empName}
+          year={year}
+          monthIdx={monthIdx}
+          total={total}
+          publicHols={publicHols}
+          mKey={mKey}
+          attendance={attendance}
+          setAttendance={setAttendance}
+          onClose={() => setCalModal(null)}
+        />
       )}
     </div>
   );

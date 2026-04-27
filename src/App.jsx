@@ -4,7 +4,9 @@ import {
   Download, Upload, ChevronLeft, ChevronRight, Zap,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { doc, onSnapshot, setDoc } from 'firebase/firestore';
 
+import { db } from './firebase';
 import { SEED_EMPLOYEES, SEED_HOLIDAYS, SEED_ATTENDANCE, COMPANY_NAME } from './seedData';
 import { MONTH_NAMES, computeMonthPayroll } from './payroll';
 import Overview from './pages/Overview';
@@ -12,50 +14,107 @@ import Attendance from './pages/Attendance';
 import Employees from './pages/Employees';
 import Holidays from './pages/Holidays';
 
-const STORAGE_KEY = 'anushree-payroll-v1';
-
-function loadState() {
-  try {
-    const s = localStorage.getItem(STORAGE_KEY);
-    if (!s) return null;
-    return JSON.parse(s);
-  } catch { return null; }
-}
-
-function saveState(state) {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* ignore */ }
+// Only UI navigation (month/year) stays local — each user can browse independently
+const UI_KEY = 'anushree-payroll-ui';
+function loadUI() {
+  try { return JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch { return {}; }
 }
 
 export default function App() {
-  const saved = loadState();
-
-  const [employees,   setEmployees]   = useState(saved?.employees   || SEED_EMPLOYEES);
-  const [holidays,    setHolidays]    = useState(saved?.holidays    || SEED_HOLIDAYS);
-  const [attendance,  setAttendance]  = useState(saved?.attendance  || SEED_ATTENDANCE);
-  const [year,  setYear]  = useState(saved?.year  || 2026);
-  const [monthIdx, setMonthIdx] = useState(saved?.monthIdx ?? 2);
+  const ui = loadUI();
+  const [employees,  setEmployees]  = useState(null);
+  const [holidays,   setHolidays]   = useState(null);
+  const [attendance, setAttendance] = useState(null);
+  const [year,     setYear]     = useState(ui.year     || 2026);
+  const [monthIdx, setMonthIdx] = useState(ui.monthIdx ?? 2);
+  const [loading,  setLoading]  = useState(true);
   const [tab, setTab] = useState('overview');
   const fileInput = useRef(null);
 
+  // Persist navigation state per-browser (not shared)
   useEffect(() => {
-    saveState({ employees, holidays, attendance, year, monthIdx });
-  }, [employees, holidays, attendance, year, monthIdx]);
+    localStorage.setItem(UI_KEY, JSON.stringify({ year, monthIdx }));
+  }, [year, monthIdx]);
+
+  // Real-time Firestore listeners — all team members see the same data instantly
+  useEffect(() => {
+    const loaded = { emp: false, hol: false, att: false };
+    const check = () => {
+      if (loaded.emp && loaded.hol && loaded.att) setLoading(false);
+    };
+
+    const unsubs = [
+      onSnapshot(doc(db, 'payroll', 'employees'), async (snap) => {
+        if (snap.exists()) {
+          setEmployees(snap.data().list);
+        } else {
+          await setDoc(doc(db, 'payroll', 'employees'), { list: SEED_EMPLOYEES });
+        }
+        loaded.emp = true;
+        check();
+      }),
+
+      onSnapshot(doc(db, 'payroll', 'holidays'), async (snap) => {
+        if (snap.exists()) {
+          setHolidays(snap.data().list);
+        } else {
+          await setDoc(doc(db, 'payroll', 'holidays'), { list: SEED_HOLIDAYS });
+        }
+        loaded.hol = true;
+        check();
+      }),
+
+      onSnapshot(doc(db, 'payroll', 'attendance'), async (snap) => {
+        if (snap.exists()) {
+          setAttendance(snap.data().map);
+        } else {
+          await setDoc(doc(db, 'payroll', 'attendance'), { map: SEED_ATTENDANCE });
+        }
+        loaded.att = true;
+        check();
+      }),
+    ];
+
+    return () => unsubs.forEach((u) => u());
+  }, []);
+
+  // Wrappers: update local state immediately + write to Firestore
+  const saveEmployees = async (val) => {
+    const next = typeof val === 'function' ? val(employees) : val;
+    setEmployees(next);
+    await setDoc(doc(db, 'payroll', 'employees'), { list: next });
+  };
+
+  const saveHolidays = async (val) => {
+    const next = typeof val === 'function' ? val(holidays) : val;
+    setHolidays(next);
+    await setDoc(doc(db, 'payroll', 'holidays'), { list: next });
+  };
+
+  const saveAttendance = async (val) => {
+    const next = typeof val === 'function' ? val(attendance) : val;
+    setAttendance(next);
+    await setDoc(doc(db, 'payroll', 'attendance'), { map: next });
+  };
 
   const shiftMonth = (delta) => {
     let m = monthIdx + delta;
     let y = year;
-    while (m < 0) { m += 12; y -= 1; }
+    while (m < 0)  { m += 12; y -= 1; }
     while (m > 11) { m -= 12; y += 1; }
     setMonthIdx(m);
     setYear(y);
   };
 
   const exportJSON = () => {
-    const blob = new Blob([JSON.stringify({ employees, holidays, attendance, year, monthIdx }, null, 2)], { type: 'application/json' });
+    const blob = new Blob(
+      [JSON.stringify({ employees, holidays, attendance, year, monthIdx }, null, 2)],
+      { type: 'application/json' },
+    );
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `anushree-payroll-backup-${new Date().toISOString().slice(0,10)}.json`;
+    a.download = `anushree-payroll-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -64,13 +123,13 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (data.employees) setEmployees(data.employees);
-        if (data.holidays) setHolidays(data.holidays);
-        if (data.attendance) setAttendance(data.attendance);
-        if (data.year) setYear(data.year);
+        if (data.employees) await saveEmployees(data.employees);
+        if (data.holidays)  await saveHolidays(data.holidays);
+        if (data.attendance) await saveAttendance(data.attendance);
+        if (data.year)     setYear(data.year);
         if (data.monthIdx != null) setMonthIdx(data.monthIdx);
         alert('Backup imported successfully.');
       } catch (err) {
@@ -107,7 +166,7 @@ export default function App() {
        Number(summary.totals.gross.toFixed(2)), Number(summary.totals.esiDeduct.toFixed(2)),
        Number(summary.totals.bonus.toFixed(2)), Number(summary.totals.netPayable.toFixed(2))],
     ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(attSheet), `${MONTH_NAMES[monthIdx].slice(0,3)}_${year}`);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(attSheet), `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
 
     const holSheet = [
       ['Date', 'Holiday', 'Type', 'Observed'],
@@ -124,6 +183,16 @@ export default function App() {
     { id: 'employees',  label: 'Employees',  icon: <Users size={14} /> },
     { id: 'holidays',   label: 'Calendar',   icon: <CalendarRange size={14} /> },
   ];
+
+  if (loading) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, color: 'var(--text-faint)' }}>
+        <div style={{ width: 32, height: 32, border: '3px solid var(--border)', borderTopColor: 'var(--amber)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+        <span>Loading payroll data…</span>
+        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      </div>
+    );
+  }
 
   return (
     <div className="app">
@@ -189,22 +258,23 @@ export default function App() {
         <Overview employees={employees} holidays={holidays} attendance={attendance} year={year} monthIdx={monthIdx} />
       )}
       {tab === 'attendance' && (
-        <Attendance employees={employees} holidays={holidays} attendance={attendance} setAttendance={setAttendance} year={year} monthIdx={monthIdx} />
+        <Attendance employees={employees} holidays={holidays} attendance={attendance} setAttendance={saveAttendance} year={year} monthIdx={monthIdx} />
       )}
       {tab === 'employees' && (
-        <Employees employees={employees} setEmployees={setEmployees} attendance={attendance} setAttendance={setAttendance} />
+        <Employees employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} />
       )}
       {tab === 'holidays' && (
-        <Holidays holidays={holidays} setHolidays={setHolidays} year={year} />
+        <Holidays holidays={holidays} setHolidays={saveHolidays} year={year} />
       )}
 
       <footer style={{ marginTop: 60, paddingTop: 20, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', color: 'var(--text-faint)', fontSize: 12, flexWrap: 'wrap', gap: 12 }}>
         <span>
-          <Zap size={11} style={{ verticalAlign: 'middle' }} /> Data auto-saved to your browser ·{' '}
-          <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => {
+          <Zap size={11} style={{ verticalAlign: 'middle' }} /> Data synced in real-time via Firebase ·{' '}
+          <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', fontSize: 11 }} onClick={async () => {
             if (confirm('Reset all data to original Excel values? This cannot be undone.')) {
-              localStorage.removeItem(STORAGE_KEY);
-              location.reload();
+              await saveEmployees(SEED_EMPLOYEES);
+              await saveHolidays(SEED_HOLIDAYS);
+              await saveAttendance(SEED_ATTENDANCE);
             }
           }}>Reset to original</button>
         </span>

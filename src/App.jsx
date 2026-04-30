@@ -194,7 +194,11 @@ export default function App() {
     } else if (tab === 'attendance') {
       const summary = computeMonthPayroll({ employees, attendance, holidays, year, monthIdx });
       const n = summary.rows.length;
-      // Data rows occupy Excel rows 4 … (3+n); grand total is at (5+n)
+      const td = summary.totalDays; // total calendar days in this month (hardcoded into formula)
+      // Column layout (A–L):
+      //   A=S.No  B=Name  C=Firm  D=Salary  E=Per-Day  F=Days Present
+      //   G=Days Absent  H=Holidays  I=Gross After Absent  J=ESI  K=Bonus  L=Net Payable
+      // Data rows: Excel rows 4 … (3+n).  Grand total: row (5+n).
       const attSheet = [
         [`${COMPANY_NAME} — ${MONTH_NAMES[monthIdx]} ${year} Payroll`],
         [],
@@ -204,24 +208,35 @@ export default function App() {
           i + 1, r.employee.name, r.employee.firm, r.employee.salary,
           Number(r.perDay.toFixed(2)), r.daysPresent, r.daysAbsent, summary.publicHolidays,
           Number(r.grossAfterAbsent.toFixed(2)),
-          0, // placeholder — replaced below with IF formula
+          Number(r.esiDeduct.toFixed(2)), // pre-computed — overridden below with formula + v
           Number(r.bonus.toFixed(2)), Number(r.netPayable.toFixed(2)),
         ]),
         [],
         ['GRAND TOTAL', '', '', summary.totals.grossBase, '', '', summary.totals.daysAbsent, '',
          Number(summary.totals.gross.toFixed(2)),
-         0, // placeholder — replaced below with SUM formula
+         Number(summary.totals.esiDeduct.toFixed(2)), // overridden below with SUM formula + v
          Number(summary.totals.bonus.toFixed(2)), Number(summary.totals.netPayable.toFixed(2))],
       ];
       const ws = XLSX.utils.aoa_to_sheet(attSheet);
-      // Column J = ESI Deducted. Replace each data cell with an Excel IF formula:
-      // =IF(D{row}<=21000, I{row}*0.0075, 0)
+      // Force !ref to cover all 12 columns so no cross-column reference becomes #REF!
+      ws['!ref'] = XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: 11, r: n + 4 } });
+      // Patch column J (ESI) with a self-contained IF formula:
+      //   =IF(D{r}<=21000, (D{r}/totalDays)*(totalDays-G{r})*0.0075, 0)
+      // Using D (Salary) and G (Days Absent) only — avoids any cross-column resolution issues.
+      // v= holds the pre-computed value so the cell always displays correctly.
       for (let i = 0; i < n; i++) {
-        const r = i + 4; // Excel row numbers start at 4 for first data row
-        ws[`J${r}`] = { t: 'n', f: `IF(D${r}<=21000,I${r}*0.0075,0)` };
+        const r = i + 4;
+        ws[`J${r}`] = {
+          t: 'n',
+          f: `IF(D${r}<=21000,(D${r}/${td})*(${td}-G${r})*0.0075,0)`,
+          v: Number(summary.rows[i].esiDeduct.toFixed(2)),
+        };
       }
-      // Grand total ESI = SUM of all data ESI cells
-      ws[`J${n + 5}`] = { t: 'n', f: `SUM(J4:J${n + 3})` };
+      ws[`J${n + 5}`] = {
+        t: 'n',
+        f: `SUM(J4:J${n + 3})`,
+        v: Number(summary.totals.esiDeduct.toFixed(2)),
+      };
       XLSX.utils.book_append_sheet(wb, ws, `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
       XLSX.writeFile(wb, `Anushree_Attendance_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 

@@ -158,40 +158,76 @@ export default function App() {
   };
 
   const exportExcel = () => {
-    const summary = computeMonthPayroll({ employees, attendance, holidays, year, monthIdx });
     const wb = XLSX.utils.book_new();
 
-    const empSheet = [
-      ['S.No', 'Name', 'Guardian', 'Firm', 'Monthly Salary (₹)', 'ESI Applicable', 'Bonus Applicable'],
-      ...employees.map((e, i) => [i + 1, e.name, e.guardian, e.firm, e.salary, e.esi ? 'YES' : 'NO', e.bonus ? 'YES' : 'NO']),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(empSheet), 'Employees');
+    if (tab === 'overview') {
+      const summary = computeMonthPayroll({ employees, attendance, holidays, year, monthIdx });
+      const overviewSheet = [
+        [`${COMPANY_NAME} — ${MONTH_NAMES[monthIdx]} ${year} Payroll Summary`],
+        [],
+        ['Metric', 'Value'],
+        ['Total Employees', summary.headcount],
+        ['Public Holidays', summary.publicHolidays],
+        ['Total Days in Month', summary.totalDays],
+        ['Gross Salary (₹)', Number(summary.totals.gross.toFixed(2))],
+        ['Employee ESI Deducted (₹)', Number(summary.totals.esiDeduct.toFixed(2))],
+        ['Employer ESI (₹)', Number(summary.totals.employerEsi.toFixed(2))],
+        ['Bonus (₹)', Number(summary.totals.bonus.toFixed(2))],
+        ['Net Payable (₹)', Number(summary.totals.netPayable.toFixed(2))],
+        [],
+        ['Firm Breakdown'],
+        ['Firm', 'Headcount', 'Gross (₹)', 'Employee ESI (₹)', 'Employer ESI (₹)', 'Bonus (₹)', 'Net Payable (₹)'],
+        ...summary.firmBreakdown.map((f) => [
+          f.firm, f.headcount,
+          Number(f.gross.toFixed(2)), Number(f.esiDeduct.toFixed(2)),
+          Number(f.employerEsi.toFixed(2)), Number(f.bonus.toFixed(2)),
+          Number(f.netPayable.toFixed(2)),
+        ]),
+        ['GRAND TOTAL', summary.headcount,
+         Number(summary.totals.gross.toFixed(2)), Number(summary.totals.esiDeduct.toFixed(2)),
+         Number(summary.totals.employerEsi.toFixed(2)), Number(summary.totals.bonus.toFixed(2)),
+         Number(summary.totals.netPayable.toFixed(2))],
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(overviewSheet), 'Overview');
+      XLSX.writeFile(wb, `Anushree_Overview_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 
-    const attSheet = [
-      [`${COMPANY_NAME} — ${MONTH_NAMES[monthIdx]} ${year} Payroll`],
-      [],
-      ['S.No', 'Name', 'Firm', 'Salary', 'Per-Day', 'Days Present', 'Days Absent', 'Holidays',
-       'Gross After Absent', 'ESI Deducted', 'Bonus', 'Net Payable'],
-      ...summary.rows.map((r, i) => [
-        i + 1, r.employee.name, r.employee.firm, r.employee.salary,
-        Number(r.perDay.toFixed(2)), r.daysPresent, r.daysAbsent, summary.publicHolidays,
-        Number(r.grossAfterAbsent.toFixed(2)), Number(r.esiDeduct.toFixed(2)),
-        Number(r.bonus.toFixed(2)), Number(r.netPayable.toFixed(2)),
-      ]),
-      [],
-      ['GRAND TOTAL', '', '', summary.totals.grossBase, '', '', summary.totals.daysAbsent, '',
-       Number(summary.totals.gross.toFixed(2)), Number(summary.totals.esiDeduct.toFixed(2)),
-       Number(summary.totals.bonus.toFixed(2)), Number(summary.totals.netPayable.toFixed(2))],
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(attSheet), `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
+    } else if (tab === 'attendance') {
+      const summary = computeMonthPayroll({ employees, attendance, holidays, year, monthIdx });
+      const attSheet = [
+        [`${COMPANY_NAME} — ${MONTH_NAMES[monthIdx]} ${year} Payroll`],
+        [],
+        ['S.No', 'Name', 'Firm', 'Salary', 'Per-Day', 'Days Present', 'Days Absent', 'Holidays',
+         'Gross After Absent', 'ESI Deducted', 'Bonus', 'Net Payable'],
+        ...summary.rows.map((r, i) => [
+          i + 1, r.employee.name, r.employee.firm, r.employee.salary,
+          Number(r.perDay.toFixed(2)), r.daysPresent, r.daysAbsent, summary.publicHolidays,
+          Number(r.grossAfterAbsent.toFixed(2)), Number(r.esiDeduct.toFixed(2)),
+          Number(r.bonus.toFixed(2)), Number(r.netPayable.toFixed(2)),
+        ]),
+        [],
+        ['GRAND TOTAL', '', '', summary.totals.grossBase, '', '', summary.totals.daysAbsent, '',
+         Number(summary.totals.gross.toFixed(2)), Number(summary.totals.esiDeduct.toFixed(2)),
+         Number(summary.totals.bonus.toFixed(2)), Number(summary.totals.netPayable.toFixed(2))],
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(attSheet), `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
+      XLSX.writeFile(wb, `Anushree_Attendance_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 
-    const holSheet = [
-      ['Date', 'Holiday', 'Type', 'Observed'],
-      ...holidays.map((h) => [h.date, h.name, h.type, h.observed ? 'YES' : 'NO']),
-    ];
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(holSheet), 'Holidays');
+    } else if (tab === 'employees') {
+      const empSheet = [
+        ['S.No', 'Name', 'Guardian', 'Firm', 'Monthly Salary (₹)', 'ESI Applicable', 'Bonus Applicable'],
+        ...employees.map((e, i) => [i + 1, e.name, e.guardian, e.firm, e.salary, e.esi ? 'YES' : 'NO', e.bonus ? 'YES' : 'NO']),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(empSheet), 'Employees');
+      XLSX.writeFile(wb, `Anushree_Employees_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 
-    XLSX.writeFile(wb, `Anushree_Payroll_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
+    } else if (tab === 'holidays') {
+      const holSheet = [
+        ['Date', 'Holiday', 'Type', 'Observed'],
+        ...holidays.map((h) => [h.date, h.name, h.type, h.observed ? 'YES' : 'NO']),
+      ];
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(holSheet), 'Holidays');
+      XLSX.writeFile(wb, `Anushree_Holidays_${year}.xlsx`);
+    }
   };
 
   const tabs = [

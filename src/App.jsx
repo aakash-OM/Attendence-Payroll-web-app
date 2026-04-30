@@ -228,14 +228,14 @@ export default function App() {
         const r = i + 4;
         ws[`J${r}`] = {
           t: 'n',
-          f: `IF(D${r}<=21000,(D${r}/${td})*(${td}-G${r})*0.0075,0)`,
-          v: Number(summary.rows[i].esiDeduct.toFixed(2)),
+          f: `ROUND(IF(D${r}<=21000,(D${r}/${td})*(${td}-G${r})*0.0075,0),0)`,
+          v: Math.round(summary.rows[i].esiDeduct),
         };
       }
       ws[`J${n + 5}`] = {
         t: 'n',
         f: `SUM(J4:J${n + 3})`,
-        v: Number(summary.totals.esiDeduct.toFixed(2)),
+        v: Math.round(summary.totals.esiDeduct),
       };
       XLSX.utils.book_append_sheet(wb, ws, `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
       XLSX.writeFile(wb, `Anushree_Attendance_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);

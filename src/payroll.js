@@ -1,4 +1,4 @@
-import { ESI_EMPLOYEE_RATE, ESI_EMPLOYER_RATE, BONUS_RATE } from './seedData';
+import { ESI_THRESHOLD, ESI_EMPLOYEE_RATE, ESI_EMPLOYER_RATE, BONUS_RATE } from './seedData';
 
 export const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -48,13 +48,14 @@ export function computeEmployeePayroll({ employee, daysPresent, totalDays, publi
   const paidDays = totalDays - daysAbsent;
   const grossAfterAbsent = perDay * paidDays;
 
-  const esiDeduct = employee.esi ? grossAfterAbsent * ESI_EMPLOYEE_RATE : 0;
+  const esiEligible = employee.salary <= ESI_THRESHOLD;
+  const esiDeduct = esiEligible ? grossAfterAbsent * ESI_EMPLOYEE_RATE : 0;
   const afterEsi = grossAfterAbsent - esiDeduct;
 
   const bonus = employee.bonus ? grossAfterAbsent * BONUS_RATE : 0;
   const netPayable = afterEsi + bonus;
 
-  const employerEsi = employee.esi ? grossAfterAbsent * ESI_EMPLOYER_RATE : 0;
+  const employerEsi = esiEligible ? grossAfterAbsent * ESI_EMPLOYER_RATE : 0;
 
   return {
     perDay,

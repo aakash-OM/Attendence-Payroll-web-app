@@ -3,6 +3,7 @@ import { Plus, Pencil, Trash2, X, FileText, Upload, ExternalLink, Loader2, Check
 import { ref as sRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase';
 import { formatINR } from '../payroll';
+import { ESI_THRESHOLD } from '../seedData';
 
 const EMPTY = {
   id: null, name: '', guardian: '', firm: '', salary: 15000, esi: true, bonus: false,
@@ -331,8 +332,8 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
                       <td className="muted">{emp.guardian}</td>
                       <td className="num">{formatINR(emp.salary)}</td>
                       <td>
-                        <span className={`pill ${emp.esi ? 'yes' : 'no'}`}>
-                          {emp.esi ? 'YES' : 'NO'}
+                        <span className={`pill ${emp.salary <= ESI_THRESHOLD ? 'yes' : 'no'}`}>
+                          {emp.salary <= ESI_THRESHOLD ? 'YES' : 'NO'}
                         </span>
                       </td>
                       <td>
@@ -414,19 +415,28 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
               <input
                 type="number"
                 value={editing.salary}
-                onChange={(e) => setEditing({ ...editing, salary: Number(e.target.value) })}
+                onChange={(e) => {
+                  const salary = Number(e.target.value);
+                  setEditing({ ...editing, salary, esi: salary <= ESI_THRESHOLD });
+                }}
                 min={0}
                 step={100}
               />
             </div>
 
-            <label className="switch-row">
+            <label className="switch-row" style={{ opacity: 0.7, cursor: 'default' }}>
               <input
                 type="checkbox"
-                checked={editing.esi}
-                onChange={(e) => setEditing({ ...editing, esi: e.target.checked })}
+                checked={editing.salary <= ESI_THRESHOLD}
+                readOnly
+                style={{ pointerEvents: 'none' }}
               />
-              <span>ESI applicable <span className="faint mono" style={{ fontSize: 11 }}>(0.75% deducted)</span></span>
+              <span>
+                ESI applicable{' '}
+                <span className="faint mono" style={{ fontSize: 11 }}>
+                  (auto: salary ≤ ₹21,000 → 0.75% deducted)
+                </span>
+              </span>
             </label>
 
             <label className="switch-row">

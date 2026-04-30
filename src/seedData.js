@@ -64,6 +64,7 @@ export const SEED_ATTENDANCE = {
 };
 
 export const COMPANY_NAME = 'Anushree Electrical Pvt. Ltd.';
+export const ESI_THRESHOLD    = 21000;   // statutory wage ceiling for ESI eligibility
 export const ESI_EMPLOYEE_RATE = 0.0075; // 0.75%
 export const ESI_EMPLOYER_RATE = 0.0325; // 3.25%
 export const BONUS_RATE = 0.0833;        // 8.33%

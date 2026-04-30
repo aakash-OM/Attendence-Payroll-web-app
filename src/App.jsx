@@ -193,23 +193,36 @@ export default function App() {
 
     } else if (tab === 'attendance') {
       const summary = computeMonthPayroll({ employees, attendance, holidays, year, monthIdx });
+      const n = summary.rows.length;
+      // Data rows occupy Excel rows 4 … (3+n); grand total is at (5+n)
       const attSheet = [
         [`${COMPANY_NAME} — ${MONTH_NAMES[monthIdx]} ${year} Payroll`],
         [],
         ['S.No', 'Name', 'Firm', 'Salary', 'Per-Day', 'Days Present', 'Days Absent', 'Holidays',
-         'Gross After Absent', 'ESI Deducted', 'Bonus', 'Net Payable'],
+         'Gross After Absent', 'ESI Deducted (0.75%)', 'Bonus', 'Net Payable'],
         ...summary.rows.map((r, i) => [
           i + 1, r.employee.name, r.employee.firm, r.employee.salary,
           Number(r.perDay.toFixed(2)), r.daysPresent, r.daysAbsent, summary.publicHolidays,
-          Number(r.grossAfterAbsent.toFixed(2)), Number(r.esiDeduct.toFixed(2)),
+          Number(r.grossAfterAbsent.toFixed(2)),
+          0, // placeholder — replaced below with IF formula
           Number(r.bonus.toFixed(2)), Number(r.netPayable.toFixed(2)),
         ]),
         [],
         ['GRAND TOTAL', '', '', summary.totals.grossBase, '', '', summary.totals.daysAbsent, '',
-         Number(summary.totals.gross.toFixed(2)), Number(summary.totals.esiDeduct.toFixed(2)),
+         Number(summary.totals.gross.toFixed(2)),
+         0, // placeholder — replaced below with SUM formula
          Number(summary.totals.bonus.toFixed(2)), Number(summary.totals.netPayable.toFixed(2))],
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(attSheet), `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
+      const ws = XLSX.utils.aoa_to_sheet(attSheet);
+      // Column J = ESI Deducted. Replace each data cell with an Excel IF formula:
+      // =IF(D{row}<=21000, I{row}*0.0075, 0)
+      for (let i = 0; i < n; i++) {
+        const r = i + 4; // Excel row numbers start at 4 for first data row
+        ws[`J${r}`] = { t: 'n', f: `IF(D${r}<=21000,I${r}*0.0075,0)` };
+      }
+      // Grand total ESI = SUM of all data ESI cells
+      ws[`J${n + 5}`] = { t: 'n', f: `SUM(J4:J${n + 3})` };
+      XLSX.utils.book_append_sheet(wb, ws, `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
       XLSX.writeFile(wb, `Anushree_Attendance_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 
     } else if (tab === 'employees') {

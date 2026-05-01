@@ -9,11 +9,11 @@ const EMPTY = {
   id: null, name: '', guardian: '', firm: '', salary: 15000, esi: true, bonus: false,
 };
 
-// empDocs = documents[emp.id] = { aadhar: { url, name, uploadedAt } | null, pan: ... } | undefined
+// empDocs = documents[emp.id] = { esi, passbook, aadhar: { url, name, uploadedAt } | null } | undefined
 function docIconStyle(empDocs) {
-  const count = (empDocs?.aadhar ? 1 : 0) + (empDocs?.pan ? 1 : 0);
-  if (count === 2) return { color: '#39ff14', filter: 'drop-shadow(0 0 6px #39ff14)' };
-  if (count === 1) return { color: '#ff8c00', filter: 'drop-shadow(0 0 6px #ff8c00)' };
+  const count = (empDocs?.esi ? 1 : 0) + (empDocs?.passbook ? 1 : 0) + (empDocs?.aadhar ? 1 : 0);
+  if (count === 3) return { color: '#39ff14', filter: 'drop-shadow(0 0 6px #39ff14)' };
+  if (count >= 1) return { color: '#ff8c00', filter: 'drop-shadow(0 0 6px #ff8c00)' };
   return { color: 'var(--text-faint)', filter: 'none' };
 }
 
@@ -22,21 +22,24 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
   const empDocs = documents?.[empId] || {};
 
   // pending: file selected by user but not yet uploaded
-  const [pending,   setPending]   = useState({ aadhar: null, pan: null });
-  const [uploading, setUploading] = useState({ aadhar: false, pan: false });
-  const [saved,     setSaved]     = useState({ aadhar: false, pan: false });
+  const [pending,   setPending]   = useState({ esi: null,  passbook: null,  aadhar: null  });
+  const [uploading, setUploading] = useState({ esi: false, passbook: false, aadhar: false });
+  const [saved,     setSaved]     = useState({ esi: false, passbook: false, aadhar: false });
+  const [errors,    setErrors]    = useState({ esi: null,  passbook: null,  aadhar: null  });
 
-  const aadharRef = useRef(null);
-  const panRef    = useRef(null);
-  const inputRefs = { aadhar: aadharRef, pan: panRef };
+  const esiRef      = useRef(null);
+  const passbookRef = useRef(null);
+  const aadharRef   = useRef(null);
+  const inputRefs = { esi: esiRef, passbook: passbookRef, aadhar: aadharRef };
 
   if (!emp) return null;
 
-  const docCount = (empDocs.aadhar ? 1 : 0) + (empDocs.pan ? 1 : 0);
+  const docCount = (empDocs.esi ? 1 : 0) + (empDocs.passbook ? 1 : 0) + (empDocs.aadhar ? 1 : 0);
 
   const selectFile = (type, file) => {
     if (!file) return;
     setPending((p) => ({ ...p, [type]: file }));
+    setErrors((e) => ({ ...e, [type]: null }));
   };
 
   const uploadDoc = async (type) => {
@@ -60,7 +63,7 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
       setSaved((s) => ({ ...s, [type]: true }));
       setTimeout(() => setSaved((s) => ({ ...s, [type]: false })), 3000);
     } catch (err) {
-      alert('Upload failed: ' + err.message);
+      setErrors((e) => ({ ...e, [type]: err.message }));
     }
     setUploading((u) => ({ ...u, [type]: false }));
   };
@@ -78,8 +81,9 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
   };
 
   const rows = [
-    { type: 'aadhar', label: 'Aadhaar Card' },
-    { type: 'pan',    label: 'PAN Card' },
+    { type: 'esi',      label: 'ESI Card'      },
+    { type: 'passbook', label: 'Bank Passbook'  },
+    { type: 'aadhar',   label: 'Aadhaar Card'   },
   ];
 
   return (
@@ -97,9 +101,9 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
         <div className="panel-title-sub" style={{ marginBottom: 4 }}>{emp.name}</div>
         <div style={{
           fontSize: 11, marginBottom: 16,
-          color: docCount === 2 ? '#39ff14' : docCount === 1 ? '#ff8c00' : 'var(--text-faint)',
+          color: docCount === 3 ? '#39ff14' : docCount >= 1 ? '#ff8c00' : 'var(--text-faint)',
         }}>
-          {docCount === 2 ? '✓ Both documents on file' : docCount === 1 ? '⚠ 1 of 2 documents uploaded' : '✗ No documents uploaded yet'}
+          {docCount === 3 ? '✓ All 3 documents on file' : docCount >= 1 ? `⚠ ${docCount} of 3 documents uploaded` : '✗ No documents uploaded yet'}
         </div>
 
         {/* Document rows */}
@@ -204,9 +208,16 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
               </div>
 
               {/* Upload hint */}
-              {pendingFile && !busy && (
+              {pendingFile && !busy && !errors[type] && (
                 <div style={{ fontSize: 10, color: 'var(--text-faint)', marginTop: 6 }}>
                   Click "Upload to Firebase" to save this file to the database.
+                </div>
+              )}
+
+              {/* Upload error */}
+              {errors[type] && (
+                <div style={{ fontSize: 11, color: '#ff4d4d', marginTop: 6, lineHeight: 1.4 }}>
+                  ⚠ Upload failed: {errors[type]}
                 </div>
               )}
             </div>
@@ -283,7 +294,7 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
         <div className="info-note">
           Edit an employee's salary, ESI/bonus eligibility, or remove them. Click the{' '}
           <FileText size={12} style={{ verticalAlign: 'middle' }} /> icon to upload KYC documents
-          (Aadhaar &amp; PAN) — stored in Firebase.
+          (ESI Card, Bank Passbook &amp; Aadhaar) — stored in Firebase.
         </div>
       </div>
 

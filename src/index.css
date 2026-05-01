@@ -216,7 +216,13 @@ input, select { font-family: inherit; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
 
 /* TABLES */
-.tbl-wrap { overflow-x: auto; margin: 0 -4px; }
+.tbl-wrap {
+  overflow: auto;
+  max-height: 480px;
+  margin: 0 -4px;
+  /* Rounded corners on the scrollable container */
+  border-radius: 0 0 10px 10px;
+}
 
 table.tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
 
@@ -227,10 +233,13 @@ table.tbl thead th {
   text-transform: uppercase; color: var(--text-dim);
   font-weight: 500; padding: 10px 12px;
   border-bottom: 1px solid var(--border); white-space: nowrap;
+  /* Freeze header row within the scroll container */
   position: sticky;
   top: 0;
   z-index: 2;
   background: var(--bg-1);
+  /* Subtle bottom shadow to visually separate frozen header from scrolling rows */
+  box-shadow: 0 1px 0 var(--border);
 }
 
 table.tbl tbody td {

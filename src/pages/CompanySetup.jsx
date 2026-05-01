@@ -40,29 +40,13 @@ export default function CompanySetup({ user, onComplete }) {
 
       const base = (key) => doc(db, 'companies', companyId, 'payroll', key);
 
-      // Check if this company already has data
+      // Initialise fresh workspace if this company has no data yet
       const empSnap = await getDoc(base('employees'));
-
       if (!empSnap.exists()) {
-        // Check for legacy flat-path data (original Anushree data before SaaS migration)
-        const legacyEmpSnap = await getDoc(doc(db, 'payroll', 'employees'));
-
-        if (legacyEmpSnap.exists()) {
-          // ── Migrate existing data to per-company path ──────────────────
-          const keys = ['employees', 'holidays', 'attendance', 'documents'];
-          for (const key of keys) {
-            const legacySnap = await getDoc(doc(db, 'payroll', key));
-            if (legacySnap.exists()) {
-              await setDoc(base(key), legacySnap.data());
-            }
-          }
-        } else {
-          // ── Brand-new company — start completely empty ─────────────────
-          await setDoc(base('employees'), { list: [] });
-          await setDoc(base('holidays'),  { list: [] });
-          await setDoc(base('attendance'), { map: {} });
-          await setDoc(base('documents'),  { map: {} });
-        }
+        await setDoc(base('employees'), { list: [] });
+        await setDoc(base('holidays'),  { list: [] });
+        await setDoc(base('attendance'), { map: {} });
+        await setDoc(base('documents'),  { map: {} });
       }
 
       onComplete({ companyId, companyName: companyName.trim() });

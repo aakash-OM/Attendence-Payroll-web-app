@@ -1,128 +1,151 @@
 import { useState, useEffect, useRef } from 'react';
 import {
   LayoutDashboard, CalendarCheck, Users, CalendarRange,
-  Download, Upload, ChevronLeft, ChevronRight, Zap,
+  Download, Upload, ChevronLeft, ChevronRight, Zap, LogOut,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { doc, onSnapshot, setDoc } from 'firebase/firestore';
+import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
+import { onAuthStateChanged, signOut } from 'firebase/auth';
 
-import { db } from './firebase';
-import { SEED_EMPLOYEES, SEED_HOLIDAYS, SEED_ATTENDANCE, COMPANY_NAME } from './seedData';
+import { db, auth } from './firebase';
+import { SEED_EMPLOYEES, SEED_HOLIDAYS, SEED_ATTENDANCE } from './seedData';
 import { MONTH_NAMES, computeMonthPayroll } from './payroll';
-import Overview from './pages/Overview';
-import Attendance from './pages/Attendance';
-import Employees from './pages/Employees';
-import Holidays from './pages/Holidays';
+import Overview    from './pages/Overview';
+import Attendance  from './pages/Attendance';
+import Employees   from './pages/Employees';
+import Holidays    from './pages/Holidays';
+import Login       from './pages/Login';
+import CompanySetup from './pages/CompanySetup';
 
-// Only UI navigation (month/year) stays local — each user can browse independently
-const UI_KEY = 'anushree-payroll-ui';
+const UI_KEY = 'payroll-ui';
 function loadUI() {
   try { return JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch { return {}; }
 }
 
+// authStatus states:
+//   'loading'     — waiting for Firebase Auth to resolve
+//   'logged-out'  — no authenticated user
+//   'needs-setup' — authenticated but no company profile yet
+//   'ready'       — authenticated + company profile loaded
 export default function App() {
+  // ── Auth ──────────────────────────────────────────────────────────────────
+  const [authStatus,   setAuthStatus]   = useState('loading');
+  const [firebaseUser, setFirebaseUser] = useState(null);
+  const [userProfile,  setUserProfile]  = useState(null);
+
+  // companyId is always the Firebase Auth UID — zero collision, simple rules
+  const companyId   = firebaseUser?.uid ?? null;
+  const companyName = userProfile?.companyName ?? 'Payroll Dashboard';
+
+  // ── App data ──────────────────────────────────────────────────────────────
   const ui = loadUI();
   const [employees,  setEmployees]  = useState(null);
   const [holidays,   setHolidays]   = useState(null);
   const [attendance, setAttendance] = useState(null);
   const [documents,  setDocuments]  = useState(null);
-  const [year,     setYear]     = useState(ui.year     || 2026);
-  const [monthIdx, setMonthIdx] = useState(ui.monthIdx ?? 2);
-  const [loading,  setLoading]  = useState(true);
-  const [tab, setTab] = useState('overview');
+  const [year,       setYear]       = useState(ui.year     || 2026);
+  const [monthIdx,   setMonthIdx]   = useState(ui.monthIdx ?? 2);
+  const [loading,    setLoading]    = useState(true);
+  const [tab,        setTab]        = useState('overview');
   const fileInput = useRef(null);
 
-  // Persist navigation state per-browser (not shared)
+  // ── Auth state listener ───────────────────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem(UI_KEY, JSON.stringify({ year, monthIdx }));
-  }, [year, monthIdx]);
+    return onAuthStateChanged(auth, async (user) => {
+      if (!user) {
+        setFirebaseUser(null);
+        setUserProfile(null);
+        setAuthStatus('logged-out');
+        return;
+      }
+      setFirebaseUser(user);
+      const snap = await getDoc(doc(db, 'users', user.uid));
+      if (snap.exists()) {
+        setUserProfile(snap.data());
+        setAuthStatus('ready');
+      } else {
+        setUserProfile(null);
+        setAuthStatus('needs-setup');
+      }
+    });
+  }, []);
 
-  // Real-time Firestore listeners — all team members see the same data instantly
+  // ── Firestore real-time listeners — runs once auth + company are ready ─────
   useEffect(() => {
+    if (authStatus !== 'ready' || !companyId) return;
+
+    setLoading(true);
     const loaded = { emp: false, hol: false, att: false, doc: false };
-    const check = () => {
+    const check  = () => {
       if (loaded.emp && loaded.hol && loaded.att && loaded.doc) setLoading(false);
     };
 
+    const base = (key) => doc(db, 'companies', companyId, 'payroll', key);
+
     const unsubs = [
-      onSnapshot(doc(db, 'payroll', 'employees'), async (snap) => {
-        if (snap.exists()) {
-          setEmployees(snap.data().list);
-        } else {
-          await setDoc(doc(db, 'payroll', 'employees'), { list: SEED_EMPLOYEES });
-        }
-        loaded.emp = true;
-        check();
+      onSnapshot(base('employees'), async (snap) => {
+        if (snap.exists()) { setEmployees(snap.data().list); }
+        else { await setDoc(base('employees'), { list: SEED_EMPLOYEES }); }
+        loaded.emp = true; check();
       }),
-
-      onSnapshot(doc(db, 'payroll', 'holidays'), async (snap) => {
-        if (snap.exists()) {
-          setHolidays(snap.data().list);
-        } else {
-          await setDoc(doc(db, 'payroll', 'holidays'), { list: SEED_HOLIDAYS });
-        }
-        loaded.hol = true;
-        check();
+      onSnapshot(base('holidays'), async (snap) => {
+        if (snap.exists()) { setHolidays(snap.data().list); }
+        else { await setDoc(base('holidays'), { list: SEED_HOLIDAYS }); }
+        loaded.hol = true; check();
       }),
-
-      onSnapshot(doc(db, 'payroll', 'attendance'), async (snap) => {
-        if (snap.exists()) {
-          setAttendance(snap.data().map);
-        } else {
-          await setDoc(doc(db, 'payroll', 'attendance'), { map: SEED_ATTENDANCE });
-        }
-        loaded.att = true;
-        check();
+      onSnapshot(base('attendance'), async (snap) => {
+        if (snap.exists()) { setAttendance(snap.data().map); }
+        else { await setDoc(base('attendance'), { map: SEED_ATTENDANCE }); }
+        loaded.att = true; check();
       }),
-
-      onSnapshot(doc(db, 'payroll', 'documents'), async (snap) => {
-        if (snap.exists()) {
-          setDocuments(snap.data().map);
-        } else {
-          await setDoc(doc(db, 'payroll', 'documents'), { map: {} });
-        }
-        loaded.doc = true;
-        check();
+      onSnapshot(base('documents'), async (snap) => {
+        if (snap.exists()) { setDocuments(snap.data().map); }
+        else { await setDoc(base('documents'), { map: {} }); }
+        loaded.doc = true; check();
       }),
     ];
 
     return () => unsubs.forEach((u) => u());
-  }, []);
+  }, [authStatus, companyId]);
 
-  // Wrappers: update local state immediately + write to Firestore
-  const saveEmployees = async (val) => {
+  // ── Persist UI nav state per-browser ─────────────────────────────────────
+  useEffect(() => {
+    localStorage.setItem(UI_KEY, JSON.stringify({ year, monthIdx }));
+  }, [year, monthIdx]);
+
+  // ── Save wrappers (write local + Firestore) ───────────────────────────────
+  const base = (key) => doc(db, 'companies', companyId, 'payroll', key);
+
+  const saveEmployees  = async (val) => {
     const next = typeof val === 'function' ? val(employees) : val;
     setEmployees(next);
-    await setDoc(doc(db, 'payroll', 'employees'), { list: next });
+    await setDoc(base('employees'), { list: next });
   };
-
-  const saveHolidays = async (val) => {
+  const saveHolidays   = async (val) => {
     const next = typeof val === 'function' ? val(holidays) : val;
     setHolidays(next);
-    await setDoc(doc(db, 'payroll', 'holidays'), { list: next });
+    await setDoc(base('holidays'), { list: next });
   };
-
   const saveAttendance = async (val) => {
     const next = typeof val === 'function' ? val(attendance) : val;
     setAttendance(next);
-    await setDoc(doc(db, 'payroll', 'attendance'), { map: next });
+    await setDoc(base('attendance'), { map: next });
   };
-
-  const saveDocuments = async (val) => {
+  const saveDocuments  = async (val) => {
     const next = typeof val === 'function' ? val(documents) : val;
     setDocuments(next);
-    await setDoc(doc(db, 'payroll', 'documents'), { map: next });
+    await setDoc(base('documents'), { map: next });
   };
 
+  // ── Month navigation ──────────────────────────────────────────────────────
   const shiftMonth = (delta) => {
-    let m = monthIdx + delta;
-    let y = year;
+    let m = monthIdx + delta, y = year;
     while (m < 0)  { m += 12; y -= 1; }
     while (m > 11) { m -= 12; y += 1; }
-    setMonthIdx(m);
-    setYear(y);
+    setMonthIdx(m); setYear(y);
   };
 
+  // ── Backup export / import ────────────────────────────────────────────────
   const exportJSON = () => {
     const blob = new Blob(
       [JSON.stringify({ employees, holidays, attendance, year, monthIdx }, null, 2)],
@@ -131,7 +154,7 @@ export default function App() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `anushree-payroll-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    a.download = `payroll-backup-${new Date().toISOString().slice(0, 10)}.json`;
     a.click();
     URL.revokeObjectURL(url);
   };
@@ -143,10 +166,10 @@ export default function App() {
     reader.onload = async (ev) => {
       try {
         const data = JSON.parse(ev.target.result);
-        if (data.employees) await saveEmployees(data.employees);
-        if (data.holidays)  await saveHolidays(data.holidays);
-        if (data.attendance) await saveAttendance(data.attendance);
-        if (data.year)     setYear(data.year);
+        if (data.employees)      await saveEmployees(data.employees);
+        if (data.holidays)       await saveHolidays(data.holidays);
+        if (data.attendance)     await saveAttendance(data.attendance);
+        if (data.year)           setYear(data.year);
         if (data.monthIdx != null) setMonthIdx(data.monthIdx);
         alert('Backup imported successfully.');
       } catch (err) {
@@ -157,23 +180,25 @@ export default function App() {
     e.target.value = '';
   };
 
+  // ── Excel export ──────────────────────────────────────────────────────────
   const exportExcel = () => {
-    const wb = XLSX.utils.book_new();
+    const wb   = XLSX.utils.book_new();
+    const slug = companyName.replace(/[^a-z0-9]/gi, '_').slice(0, 18);
 
     if (tab === 'overview') {
       const summary = computeMonthPayroll({ employees, attendance, holidays, year, monthIdx });
-      const overviewSheet = [
-        [`${COMPANY_NAME} — ${MONTH_NAMES[monthIdx]} ${year} Payroll Summary`],
+      const sheet = [
+        [`${companyName} — ${MONTH_NAMES[monthIdx]} ${year} Payroll Summary`],
         [],
         ['Metric', 'Value'],
-        ['Total Employees', summary.headcount],
-        ['Public Holidays', summary.publicHolidays],
-        ['Total Days in Month', summary.totalDays],
-        ['Gross Salary (₹)', Number(summary.totals.gross.toFixed(2))],
+        ['Total Employees',        summary.headcount],
+        ['Public Holidays',        summary.publicHolidays],
+        ['Total Days in Month',    summary.totalDays],
+        ['Gross Salary (₹)',       Number(summary.totals.gross.toFixed(2))],
         ['Employee ESI Deducted (₹)', Number(summary.totals.esiDeduct.toFixed(2))],
-        ['Employer ESI (₹)', Number(summary.totals.employerEsi.toFixed(2))],
-        ['Bonus (₹)', Number(summary.totals.bonus.toFixed(2))],
-        ['Net Payable (₹)', Number(summary.totals.netPayable.toFixed(2))],
+        ['Employer ESI (₹)',       Number(summary.totals.employerEsi.toFixed(2))],
+        ['Bonus (₹)',              Number(summary.totals.bonus.toFixed(2))],
+        ['Net Payable (₹)',        Number(summary.totals.netPayable.toFixed(2))],
         [],
         ['Firm Breakdown'],
         ['Firm', 'Headcount', 'Gross (₹)', 'Employee ESI (₹)', 'Employer ESI (₹)', 'Bonus (₹)', 'Net Payable (₹)'],
@@ -188,19 +213,15 @@ export default function App() {
          Number(summary.totals.employerEsi.toFixed(2)), Number(summary.totals.bonus.toFixed(2)),
          Number(summary.totals.netPayable.toFixed(2))],
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(overviewSheet), 'Overview');
-      XLSX.writeFile(wb, `Anushree_Overview_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet), 'Overview');
+      XLSX.writeFile(wb, `${slug}_Overview_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 
     } else if (tab === 'attendance') {
       const summary = computeMonthPayroll({ employees, attendance, holidays, year, monthIdx });
       const n = summary.rows.length;
-      const td = summary.totalDays; // total calendar days in this month (hardcoded into formula)
-      // Column layout (A–L):
-      //   A=S.No  B=Name  C=Firm  D=Salary  E=Per-Day  F=Days Present
-      //   G=Days Absent  H=Holidays  I=Gross After Absent  J=ESI  K=Bonus  L=Net Payable
-      // Data rows: Excel rows 4 … (3+n).  Grand total: row (5+n).
-      const attSheet = [
-        [`${COMPANY_NAME} — ${MONTH_NAMES[monthIdx]} ${year} Payroll`],
+      const td = summary.totalDays;
+      const sheet = [
+        [`${companyName} — ${MONTH_NAMES[monthIdx]} ${year} Payroll`],
         [],
         ['S.No', 'Name', 'Firm', 'Salary', 'Per-Day', 'Days Present', 'Days Absent', 'Holidays',
          'Gross After Absent', 'ESI Deducted (0.75%)', 'Bonus', 'Net Payable'],
@@ -208,22 +229,17 @@ export default function App() {
           i + 1, r.employee.name, r.employee.firm, r.employee.salary,
           Number(r.perDay.toFixed(2)), r.daysPresent, r.daysAbsent, summary.publicHolidays,
           Number(r.grossAfterAbsent.toFixed(2)),
-          Number(r.esiDeduct.toFixed(2)), // pre-computed — overridden below with formula + v
+          Number(r.esiDeduct.toFixed(2)),
           Number(r.bonus.toFixed(2)), Number(r.netPayable.toFixed(2)),
         ]),
         [],
         ['GRAND TOTAL', '', '', summary.totals.grossBase, '', '', summary.totals.daysAbsent, '',
          Number(summary.totals.gross.toFixed(2)),
-         Number(summary.totals.esiDeduct.toFixed(2)), // overridden below with SUM formula + v
+         Number(summary.totals.esiDeduct.toFixed(2)),
          Number(summary.totals.bonus.toFixed(2)), Number(summary.totals.netPayable.toFixed(2))],
       ];
-      const ws = XLSX.utils.aoa_to_sheet(attSheet);
-      // Force !ref to cover all 12 columns so no cross-column reference becomes #REF!
+      const ws = XLSX.utils.aoa_to_sheet(sheet);
       ws['!ref'] = XLSX.utils.encode_range({ s: { c: 0, r: 0 }, e: { c: 11, r: n + 4 } });
-      // Patch column J (ESI) with a self-contained IF formula:
-      //   =IF(D{r}<=21000, (D{r}/totalDays)*(totalDays-G{r})*0.0075, 0)
-      // Using D (Salary) and G (Days Absent) only — avoids any cross-column resolution issues.
-      // v= holds the pre-computed value so the cell always displays correctly.
       for (let i = 0; i < n; i++) {
         const r = i + 4;
         ws[`J${r}`] = {
@@ -232,59 +248,68 @@ export default function App() {
           v: Math.round(summary.rows[i].esiDeduct),
         };
       }
-      ws[`J${n + 5}`] = {
-        t: 'n',
-        f: `SUM(J4:J${n + 3})`,
-        v: Math.round(summary.totals.esiDeduct),
-      };
+      ws[`J${n + 5}`] = { t: 'n', f: `SUM(J4:J${n + 3})`, v: Math.round(summary.totals.esiDeduct) };
       XLSX.utils.book_append_sheet(wb, ws, `${MONTH_NAMES[monthIdx].slice(0, 3)}_${year}`);
-      XLSX.writeFile(wb, `Anushree_Attendance_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
+      XLSX.writeFile(wb, `${slug}_Attendance_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 
     } else if (tab === 'employees') {
-      const empSheet = [
+      const sheet = [
         ['S.No', 'Name', 'Guardian', 'Firm', 'Monthly Salary (₹)', 'ESI Applicable', 'Bonus Applicable'],
         ...employees.map((e, i) => [i + 1, e.name, e.guardian, e.firm, e.salary, e.esi ? 'YES' : 'NO', e.bonus ? 'YES' : 'NO']),
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(empSheet), 'Employees');
-      XLSX.writeFile(wb, `Anushree_Employees_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet), 'Employees');
+      XLSX.writeFile(wb, `${slug}_Employees_${MONTH_NAMES[monthIdx]}_${year}.xlsx`);
 
     } else if (tab === 'holidays') {
-      const holSheet = [
+      const sheet = [
         ['Date', 'Holiday', 'Type', 'Observed'],
         ...holidays.map((h) => [h.date, h.name, h.type, h.observed ? 'YES' : 'NO']),
       ];
-      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(holSheet), 'Holidays');
-      XLSX.writeFile(wb, `Anushree_Holidays_${year}.xlsx`);
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(sheet), 'Holidays');
+      XLSX.writeFile(wb, `${slug}_Holidays_${year}.xlsx`);
     }
   };
 
+  // ── Auth gate ─────────────────────────────────────────────────────────────
+  const Spinner = ({ label }) => (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, color: 'var(--text-faint)' }}>
+      <div style={{ width: 32, height: 32, border: '3px solid var(--border)', borderTopColor: 'var(--accent)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
+      {label && <span style={{ fontSize: 13 }}>{label}</span>}
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
+  );
+
+  if (authStatus === 'loading')     return <Spinner />;
+  if (authStatus === 'logged-out')  return <Login />;
+  if (authStatus === 'needs-setup') return (
+    <CompanySetup
+      user={firebaseUser}
+      onComplete={(profile) => { setUserProfile(profile); setAuthStatus('ready'); }}
+    />
+  );
+  if (loading) return <Spinner label={`Loading ${companyName}…`} />;
+
+  // ── Dashboard ─────────────────────────────────────────────────────────────
   const tabs = [
     { id: 'overview',   label: 'Overview',   icon: <LayoutDashboard size={14} /> },
-    { id: 'attendance', label: 'Attendance', icon: <CalendarCheck size={14} /> },
-    { id: 'employees',  label: 'Employees',  icon: <Users size={14} /> },
-    { id: 'holidays',   label: 'Calendar',   icon: <CalendarRange size={14} /> },
+    { id: 'attendance', label: 'Attendance', icon: <CalendarCheck   size={14} /> },
+    { id: 'employees',  label: 'Employees',  icon: <Users           size={14} /> },
+    { id: 'holidays',   label: 'Calendar',   icon: <CalendarRange   size={14} /> },
   ];
-
-  if (loading) {
-    return (
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100vh', flexDirection: 'column', gap: 16, color: 'var(--text-faint)' }}>
-        <div style={{ width: 32, height: 32, border: '3px solid var(--border)', borderTopColor: 'var(--amber)', borderRadius: '50%', animation: 'spin 0.8s linear infinite' }} />
-        <span>Loading payroll data…</span>
-        <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
-      </div>
-    );
-  }
 
   return (
     <div className="app">
       <div className="topbar">
         <div className="brand">
-          <div className="brand-mark">Anushree Electrical Pvt. Ltd.</div>
+          <div className="brand-mark">{companyName}</div>
           <h1>Payroll & <em>Attendance</em></h1>
-          <div className="brand-sub">Interactive payroll dashboard · {employees.length} employees · {MONTH_NAMES[monthIdx]} {year}</div>
+          <div className="brand-sub">
+            Interactive payroll dashboard · {employees.length} employees · {MONTH_NAMES[monthIdx]} {year}
+          </div>
         </div>
 
         <div className="topbar-actions">
+          {/* Month / year picker */}
           <div style={{ display: 'flex', gap: 4, alignItems: 'center', background: 'var(--bg-1)', border: '1px solid var(--border)', borderRadius: 10, padding: 4 }}>
             <button className="btn btn-ghost btn-sm" onClick={() => shiftMonth(-1)} title="Previous month">
               <ChevronLeft size={14} />
@@ -311,13 +336,17 @@ export default function App() {
           <button className="btn btn-sm btn-ghost" onClick={() => fileInput.current?.click()}>
             <Upload size={13} /> Restore
           </button>
-          <input
-            ref={fileInput}
-            type="file"
-            accept=".json,application/json"
-            style={{ display: 'none' }}
-            onChange={importJSON}
-          />
+          <input ref={fileInput} type="file" accept=".json,application/json" style={{ display: 'none' }} onChange={importJSON} />
+
+          {/* Sign out */}
+          <button
+            className="btn btn-sm btn-ghost"
+            onClick={() => signOut(auth)}
+            title={`Signed in as ${firebaseUser?.email || firebaseUser?.displayName}`}
+            style={{ borderLeft: '1px solid var(--border)', borderRadius: 0, paddingLeft: 12 }}
+          >
+            <LogOut size={13} /> Sign out
+          </button>
         </div>
       </div>
 
@@ -328,36 +357,30 @@ export default function App() {
             className={`tab ${tab === t.id ? 'active' : ''}`}
             onClick={() => setTab(t.id)}
           >
-            <span className="tab-dot"></span>
+            <span className="tab-dot" />
             {t.icon}
             {t.label}
           </button>
         ))}
       </div>
 
-      {tab === 'overview' && (
-        <Overview employees={employees} holidays={holidays} attendance={attendance} year={year} monthIdx={monthIdx} />
-      )}
-      {tab === 'attendance' && (
-        <Attendance employees={employees} holidays={holidays} attendance={attendance} setAttendance={saveAttendance} year={year} monthIdx={monthIdx} />
-      )}
-      {tab === 'employees' && (
-        <Employees employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} documents={documents} setDocuments={saveDocuments} />
-      )}
-      {tab === 'holidays' && (
-        <Holidays holidays={holidays} setHolidays={saveHolidays} year={year} />
-      )}
+      {tab === 'overview'   && <Overview   employees={employees} holidays={holidays} attendance={attendance} year={year} monthIdx={monthIdx} />}
+      {tab === 'attendance' && <Attendance employees={employees} holidays={holidays} attendance={attendance} setAttendance={saveAttendance} year={year} monthIdx={monthIdx} />}
+      {tab === 'employees'  && <Employees  employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} documents={documents} setDocuments={saveDocuments} companyId={companyId} />}
+      {tab === 'holidays'   && <Holidays   holidays={holidays} setHolidays={saveHolidays} year={year} />}
 
       <footer style={{ marginTop: 60, paddingTop: 20, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', color: 'var(--text-faint)', fontSize: 12, flexWrap: 'wrap', gap: 12 }}>
         <span>
           <Zap size={11} style={{ verticalAlign: 'middle' }} /> Data synced in real-time via Firebase ·{' '}
           <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', fontSize: 11 }} onClick={async () => {
-            if (confirm('Reset all data to original Excel values? This cannot be undone.')) {
+            if (confirm('Reset all data to original values? This cannot be undone.')) {
               await saveEmployees(SEED_EMPLOYEES);
               await saveHolidays(SEED_HOLIDAYS);
               await saveAttendance(SEED_ATTENDANCE);
             }
-          }}>Reset to original</button>
+          }}>
+            Reset to original
+          </button>
         </span>
         <span className="mono">ESI 0.75%/3.25% · BONUS 8.33%</span>
       </footer>

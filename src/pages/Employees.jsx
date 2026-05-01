@@ -17,7 +17,7 @@ function docIconStyle(empDocs) {
   return { color: 'var(--text-faint)', filter: 'none' };
 }
 
-function DocModal({ empId, employees, documents, setDocuments, onClose }) {
+function DocModal({ empId, employees, documents, setDocuments, companyId, onClose }) {
   const emp     = employees.find((e) => e.id === empId);
   const empDocs = documents?.[empId] || {};
 
@@ -48,7 +48,7 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
 
     setUploading((u) => ({ ...u, [type]: true }));
     try {
-      const fileRef = sRef(storage, `documents/${empId}/${type}`);
+      const fileRef = sRef(storage, `documents/${companyId}/${empId}/${type}`);
       const timeout = new Promise((_, reject) =>
         setTimeout(() => reject(new Error(
           'Upload timed out. Make sure Firebase Storage is enabled in the Firebase Console and Storage rules allow writes.'
@@ -76,7 +76,7 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
   const removeDoc = async (type) => {
     if (!confirm('Remove this document?')) return;
     try {
-      await deleteObject(sRef(storage, `documents/${empId}/${type}`));
+      await deleteObject(sRef(storage, `documents/${companyId}/${empId}/${type}`));
     } catch { /* file may not exist in Storage */ }
     const updatedMap = {
       ...documents,
@@ -237,7 +237,7 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
   );
 }
 
-export default function Employees({ employees, setEmployees, attendance, setAttendance, documents, setDocuments }) {
+export default function Employees({ employees, setEmployees, attendance, setAttendance, documents, setDocuments, companyId }) {
   const [editing,  setEditing]  = useState(null);
   const [creating, setCreating] = useState(false);
   const [docEmpId, setDocEmpId] = useState(null);
@@ -397,7 +397,7 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
             >
               <div>
                 <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <FileText size={16} style={{ color: 'var(--amber)' }} />
+                  <FileText size={16} style={{ color: 'var(--accent)' }} />
                   KYC Document Status
                 </h2>
                 <div className="panel-title-sub">
@@ -498,6 +498,7 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
           employees={employees}
           documents={documents}
           setDocuments={setDocuments}
+          companyId={companyId}
           onClose={() => setDocEmpId(null)}
         />
       )}

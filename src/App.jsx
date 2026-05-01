@@ -8,7 +8,6 @@ import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 import { db, auth } from './firebase';
-import { SEED_EMPLOYEES, SEED_HOLIDAYS, SEED_ATTENDANCE } from './seedData';
 import { MONTH_NAMES, computeMonthPayroll } from './payroll';
 import Overview    from './pages/Overview';
 import Attendance  from './pages/Attendance';
@@ -85,17 +84,17 @@ export default function App() {
     const unsubs = [
       onSnapshot(base('employees'), async (snap) => {
         if (snap.exists()) { setEmployees(snap.data().list); }
-        else { await setDoc(base('employees'), { list: SEED_EMPLOYEES }); }
+        else { await setDoc(base('employees'), { list: [] }); }
         loaded.emp = true; check();
       }),
       onSnapshot(base('holidays'), async (snap) => {
         if (snap.exists()) { setHolidays(snap.data().list); }
-        else { await setDoc(base('holidays'), { list: SEED_HOLIDAYS }); }
+        else { await setDoc(base('holidays'), { list: [] }); }
         loaded.hol = true; check();
       }),
       onSnapshot(base('attendance'), async (snap) => {
         if (snap.exists()) { setAttendance(snap.data().map); }
-        else { await setDoc(base('attendance'), { map: SEED_ATTENDANCE }); }
+        else { await setDoc(base('attendance'), { map: {} }); }
         loaded.att = true; check();
       }),
       onSnapshot(base('documents'), async (snap) => {
@@ -371,16 +370,7 @@ export default function App() {
 
       <footer style={{ marginTop: 60, paddingTop: 20, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', color: 'var(--text-faint)', fontSize: 12, flexWrap: 'wrap', gap: 12 }}>
         <span>
-          <Zap size={11} style={{ verticalAlign: 'middle' }} /> Data synced in real-time via Firebase ·{' '}
-          <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', fontSize: 11 }} onClick={async () => {
-            if (confirm('Reset all data to original values? This cannot be undone.')) {
-              await saveEmployees(SEED_EMPLOYEES);
-              await saveHolidays(SEED_HOLIDAYS);
-              await saveAttendance(SEED_ATTENDANCE);
-            }
-          }}>
-            Reset to original
-          </button>
+          <Zap size={11} style={{ verticalAlign: 'middle' }} /> Data synced in real-time via Firebase
         </span>
         <span className="mono">ESI 0.75%/3.25% · BONUS 8.33%</span>
       </footer>

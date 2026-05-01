@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react';
-import { Plus, Pencil, Trash2, X, FileText, Upload, ExternalLink, Loader2, CheckCircle2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, FileText, Upload, ExternalLink, Loader2, CheckCircle2, ChevronDown } from 'lucide-react';
 import { ref as sRef, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
 import { storage } from '../firebase';
 import { formatINR } from '../payroll';
@@ -241,6 +241,7 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
   const [editing,  setEditing]  = useState(null);
   const [creating, setCreating] = useState(false);
   const [docEmpId, setDocEmpId] = useState(null);
+  const [kycOpen,  setKycOpen]  = useState(true);
 
   const firms = [...new Set(employees.map((e) => e.firm))];
 
@@ -337,7 +338,7 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
                         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                           <button
                             onClick={() => setDocEmpId(emp.id)}
-                            title={`KYC Documents — Aadhaar: ${empDocs?.aadhar ? '✓' : '✗'}  PAN: ${empDocs?.pan ? '✓' : '✗'}`}
+                            title={`KYC Documents — ESI: ${empDocs?.esi ? '✓' : '✗'}  Passbook: ${empDocs?.passbook ? '✓' : '✗'}  Aadhaar: ${empDocs?.aadhar ? '✓' : '✗'}`}
                             style={{ background: 'none', border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center' }}
                           >
                             <FileText size={13} style={{ flexShrink: 0, ...docIconStyle(empDocs) }} />
@@ -373,6 +374,122 @@ export default function Employees({ employees, setEmployees, attendance, setAtte
           </div>
         </div>
       ))}
+
+      {/* KYC Document Status panel */}
+      {(() => {
+        const DOC_TYPES = [
+          { type: 'esi',      label: 'ESI Card'     },
+          { type: 'passbook', label: 'Bank Passbook' },
+          { type: 'aadhar',   label: 'Aadhaar Card'  },
+        ];
+        const completeCount = employees.filter((e) => {
+          const d = documents?.[e.id] || {};
+          return d.esi && d.passbook && d.aadhar;
+        }).length;
+        const missingCount = employees.length - completeCount;
+
+        return (
+          <div className="panel">
+            <div
+              className="panel-title"
+              onClick={() => setKycOpen((o) => !o)}
+              style={{ cursor: 'pointer', userSelect: 'none' }}
+            >
+              <div>
+                <h2 style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <FileText size={16} style={{ color: 'var(--amber)' }} />
+                  KYC Document Status
+                </h2>
+                <div className="panel-title-sub">
+                  — {employees.length} EMPLOYEES ·{' '}
+                  <span style={{ color: '#39ff14' }}>{completeCount} COMPLETE</span>
+                  {missingCount > 0 && (
+                    <> · <span style={{ color: '#ff8c00' }}>{missingCount} MISSING DOCS</span></>
+                  )}
+                </div>
+              </div>
+              <ChevronDown
+                size={16}
+                style={{
+                  color: 'var(--text-faint)',
+                  transform: kycOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  transition: 'transform 0.2s',
+                }}
+              />
+            </div>
+
+            {kycOpen && (
+              <div className="tbl-wrap">
+                <table className="tbl">
+                  <thead>
+                    <tr>
+                      <th style={{ width: 30 }}>#</th>
+                      <th>Employee</th>
+                      <th>Firm</th>
+                      {DOC_TYPES.map(({ label }) => (
+                        <th key={label} style={{ textAlign: 'center' }}>{label}</th>
+                      ))}
+                      <th style={{ textAlign: 'center' }}>Status</th>
+                      <th style={{ width: 36 }}></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {employees.map((emp, i) => {
+                      const empDocs = documents?.[emp.id] || {};
+                      const count   = (empDocs.esi ? 1 : 0) + (empDocs.passbook ? 1 : 0) + (empDocs.aadhar ? 1 : 0);
+                      return (
+                        <tr key={emp.id}>
+                          <td className="faint mono">{i + 1}</td>
+                          <td style={{ fontWeight: 500 }}>{emp.name}</td>
+                          <td className="muted" style={{ fontSize: 12 }}>{emp.firm}</td>
+                          {DOC_TYPES.map(({ type }) => {
+                            const doc = empDocs[type];
+                            return (
+                              <td key={type} style={{ textAlign: 'center' }}>
+                                {doc ? (
+                                  <a
+                                    href={doc.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="btn btn-sm btn-ghost"
+                                    style={{ fontSize: 11, color: '#39ff14', gap: 3, padding: '2px 8px' }}
+                                    title={doc.name}
+                                  >
+                                    <ExternalLink size={10} /> View
+                                  </a>
+                                ) : (
+                                  <span style={{ color: '#ff4d4d', fontSize: 13 }}>✗</span>
+                                )}
+                              </td>
+                            );
+                          })}
+                          <td style={{ textAlign: 'center' }}>
+                            <span style={{
+                              fontSize: 11, fontWeight: 600,
+                              color: count === 3 ? '#39ff14' : count >= 1 ? '#ff8c00' : '#ff4d4d',
+                            }}>
+                              {count === 3 ? '✓ Complete' : `${count} / 3`}
+                            </span>
+                          </td>
+                          <td>
+                            <button
+                              className="btn btn-sm btn-ghost"
+                              onClick={() => setDocEmpId(emp.id)}
+                              title="Upload / manage documents"
+                            >
+                              <Upload size={12} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* Document upload modal */}
       {docEmpId !== null && (

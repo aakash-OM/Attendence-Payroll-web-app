@@ -8,6 +8,7 @@ import { doc, onSnapshot, setDoc, getDoc } from 'firebase/firestore';
 import { onAuthStateChanged, signOut } from 'firebase/auth';
 
 import { db, auth } from './firebase';
+import { SEED_HOLIDAYS } from './seedData';
 import { MONTH_NAMES, computeMonthPayroll } from './payroll';
 import Overview    from './pages/Overview';
 import Attendance  from './pages/Attendance';
@@ -89,7 +90,7 @@ export default function App() {
       }),
       onSnapshot(base('holidays'), async (snap) => {
         if (snap.exists()) { setHolidays(snap.data().list); }
-        else { await setDoc(base('holidays'), { list: [] }); }
+        else { await setDoc(base('holidays'), { list: SEED_HOLIDAYS }); }
         loaded.hol = true; check();
       }),
       onSnapshot(base('attendance'), async (snap) => {

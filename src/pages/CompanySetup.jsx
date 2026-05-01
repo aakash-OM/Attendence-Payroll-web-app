@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
+import { SEED_HOLIDAYS } from '../seedData';
 import { Zap } from 'lucide-react';
 
 function slugify(str) {
@@ -44,7 +45,7 @@ export default function CompanySetup({ user, onComplete }) {
       const empSnap = await getDoc(base('employees'));
       if (!empSnap.exists()) {
         await setDoc(base('employees'), { list: [] });
-        await setDoc(base('holidays'),  { list: [] });
+        await setDoc(base('holidays'),  { list: SEED_HOLIDAYS });
         await setDoc(base('attendance'), { map: {} });
         await setDoc(base('documents'),  { map: {} });
       }

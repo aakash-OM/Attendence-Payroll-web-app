@@ -199,20 +199,28 @@ export default function Login() {
     clearError();
     setLoading(true);
     try {
-      // Create invisible reCAPTCHA if not already present
-      if (!recaptchaRef.current) {
-        recaptchaRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-        });
+      // Always destroy the old instance + wipe DOM node before creating a new one.
+      // Without the innerHTML clear, Firebase throws "reCAPTCHA already rendered"
+      // even after calling .clear() on the JS object.
+      if (recaptchaRef.current) {
+        recaptchaRef.current.clear();
+        recaptchaRef.current = null;
       }
+      const container = document.getElementById('recaptcha-container');
+      if (container) container.innerHTML = '';
+
+      recaptchaRef.current = new RecaptchaVerifier(auth, 'recaptcha-container', {
+        size: 'invisible',
+      });
       const fullNumber = `+91${phone}`;
       const result = await signInWithPhoneNumber(auth, fullNumber, recaptchaRef.current);
       confirmationRef.current = result;
       setPhoneStep('otp');
     } catch (err) {
-      // Reset reCAPTCHA on error so user can retry cleanly
       recaptchaRef.current?.clear();
       recaptchaRef.current = null;
+      const container = document.getElementById('recaptcha-container');
+      if (container) container.innerHTML = '';
       setError(friendlyError(err));
     }
     setLoading(false);
@@ -238,8 +246,12 @@ export default function Login() {
     setOtp('');
     clearError();
     confirmationRef.current = null;
-    recaptchaRef.current?.clear();
-    recaptchaRef.current = null;
+    if (recaptchaRef.current) {
+      recaptchaRef.current.clear();
+      recaptchaRef.current = null;
+    }
+    const container = document.getElementById('recaptcha-container');
+    if (container) container.innerHTML = '';
   };
 
   // ── Decide header text ──────────────────────────────────────────────────────

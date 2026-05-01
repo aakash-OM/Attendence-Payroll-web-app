@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { doc, setDoc, getDoc } from 'firebase/firestore';
 import { signOut } from 'firebase/auth';
 import { db, auth } from '../firebase';
-import { SEED_EMPLOYEES, SEED_HOLIDAYS, SEED_ATTENDANCE } from '../seedData';
 import { Zap } from 'lucide-react';
 
 function slugify(str) {
@@ -58,10 +57,10 @@ export default function CompanySetup({ user, onComplete }) {
             }
           }
         } else {
-          // ── Brand-new company — seed with starter data ─────────────────
-          await setDoc(base('employees'), { list: SEED_EMPLOYEES });
-          await setDoc(base('holidays'),  { list: SEED_HOLIDAYS });
-          await setDoc(base('attendance'), { map: SEED_ATTENDANCE });
+          // ── Brand-new company — start completely empty ─────────────────
+          await setDoc(base('employees'), { list: [] });
+          await setDoc(base('holidays'),  { list: [] });
+          await setDoc(base('attendance'), { map: {} });
           await setDoc(base('documents'),  { map: {} });
         }
       }
@@ -119,7 +118,7 @@ export default function CompanySetup({ user, onComplete }) {
               <input
                 value={companyName}
                 onChange={(e) => { setCompanyName(e.target.value); setError(''); }}
-                placeholder="e.g. Anushree Electrical Pvt. Ltd."
+                placeholder="e.g. ABC Industries Pvt. Ltd."
                 required
                 autoFocus
               />
@@ -136,18 +135,6 @@ export default function CompanySetup({ user, onComplete }) {
                 ID: <span style={{ color: 'var(--accent)' }}>{preview || '—'}</span>
               </div>
             )}
-
-            <div style={{
-              fontSize: 12, color: 'var(--text-faint)',
-              background: 'var(--bg-2)',
-              borderLeft: '2px solid var(--accent)',
-              padding: '10px 14px',
-              borderRadius: '0 8px 8px 0',
-              marginBottom: 24, lineHeight: 1.6,
-            }}>
-              If you have existing payroll data in this Firebase project, it will be
-              automatically migrated to your private company workspace.
-            </div>
 
             {error && (
               <div style={{

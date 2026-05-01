@@ -12,7 +12,9 @@ import { Zap } from 'lucide-react';
 
 const googleProvider = new GoogleAuthProvider();
 
-function friendlyError(code) {
+function friendlyError(err) {
+  const code = err?.code ?? '';
+  console.error('[Auth error]', code, err?.message);
   switch (code) {
     case 'auth/user-not-found':             return 'No account found with this email.';
     case 'auth/wrong-password':             return 'Incorrect password.';
@@ -21,11 +23,16 @@ function friendlyError(code) {
     case 'auth/weak-password':              return 'Password must be at least 6 characters.';
     case 'auth/invalid-email':              return 'Please enter a valid email address.';
     case 'auth/too-many-requests':          return 'Too many attempts. Please wait a moment and try again.';
-    case 'auth/invalid-phone-number':       return 'Invalid phone number. Make sure to enter a 10-digit Indian mobile number.';
+    case 'auth/network-request-failed':     return 'Network error. Check your internet connection and try again.';
+    case 'auth/operation-not-allowed':      return 'This sign-in method is not enabled. Go to Firebase Console → Authentication → Sign-in method and enable it.';
+    case 'auth/configuration-not-found':    return 'Firebase Authentication is not set up. Go to Firebase Console → Authentication → Get started.';
+    case 'auth/invalid-api-key':            return 'Invalid Firebase config. Check your firebase.js settings.';
+    case 'auth/invalid-phone-number':       return 'Invalid phone number. Enter a 10-digit Indian mobile number.';
     case 'auth/invalid-verification-code':  return 'Incorrect OTP. Please check and try again.';
     case 'auth/code-expired':               return 'OTP has expired. Go back and request a new one.';
     case 'auth/missing-phone-number':       return 'Please enter your phone number.';
-    default:                                return 'Something went wrong. Please try again.';
+    case 'auth/captcha-check-failed':       return 'reCAPTCHA check failed. Refresh the page and try again.';
+    default:                                return `Error (${code || 'unknown'}): ${err?.message ?? 'Something went wrong. Please try again.'}`;
   }
 }
 
@@ -164,7 +171,7 @@ export default function Login() {
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (err) {
-      if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err.code));
+      if (err.code !== 'auth/popup-closed-by-user') setError(friendlyError(err));
     }
     setLoading(false);
   };
@@ -181,7 +188,7 @@ export default function Login() {
         await createUserWithEmailAndPassword(auth, email, password);
       }
     } catch (err) {
-      setError(friendlyError(err.code));
+      setError(friendlyError(err));
     }
     setLoading(false);
   };
@@ -206,7 +213,7 @@ export default function Login() {
       // Reset reCAPTCHA on error so user can retry cleanly
       recaptchaRef.current?.clear();
       recaptchaRef.current = null;
-      setError(friendlyError(err.code));
+      setError(friendlyError(err));
     }
     setLoading(false);
   };
@@ -220,7 +227,7 @@ export default function Login() {
       await confirmationRef.current.confirm(otp);
       // onAuthStateChanged in App.jsx takes it from here
     } catch (err) {
-      setError(friendlyError(err.code));
+      setError(friendlyError(err));
     }
     setLoading(false);
   };

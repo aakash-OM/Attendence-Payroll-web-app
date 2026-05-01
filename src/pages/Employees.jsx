@@ -49,7 +49,12 @@ function DocModal({ empId, employees, documents, setDocuments, onClose }) {
     setUploading((u) => ({ ...u, [type]: true }));
     try {
       const fileRef = sRef(storage, `documents/${empId}/${type}`);
-      await uploadBytes(fileRef, file);
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error(
+          'Upload timed out. Make sure Firebase Storage is enabled in the Firebase Console and Storage rules allow writes.'
+        )), 30000)
+      );
+      await Promise.race([uploadBytes(fileRef, file), timeout]);
       const url = await getDownloadURL(fileRef);
 
       const entry = { url, name: file.name, uploadedAt: new Date().toISOString() };

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Check, RotateCcw, Zap, CalendarDays, X } from 'lucide-react';
 import {
-  computeMonthPayroll, daysInMonth, monthKey, MONTH_NAMES, formatINR, formatINRExact,
+  computeMonthPayroll, daysInMonth, monthKey, MONTH_NAMES, formatINR, formatINRExact, AEEPL_DIVISOR,
 } from '../payroll';
 
 function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, attendance, setAttendance, onClose }) {
@@ -31,20 +31,15 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
     }));
   });
 
-  // overtimeDays: Map<dayNum, 'half' | 'full'>  — only valid on Sun / holidays
+  // overtimeDays: Map<dayNum, 'full'> — full-day OT only (AEEPL policy)
   const [overtimeDays, setOvertimeDays] = useState(() => {
     const saved = attendance[mKey]?.[otKey];
     return saved ? new Map(saved) : new Map();
   });
 
-  // Working days = all days minus Sundays minus observed holidays
-  const workingDays = Array.from({ length: total }, (_, i) => i + 1).filter((day) => {
-    const dow = (firstDayOfWeek + day - 1) % 7;
-    return dow !== 0 && !holidayDayNums.has(day);
-  }).length;
-
-  const overtimeBonus = [...overtimeDays.values()].reduce((s, t) => s + (t === 'half' ? 0.5 : 1), 0);
-  const presentCount = Math.max(0, workingDays - absentDays.size + overtimeBonus);
+  // Full-day OT count (each adds 1 paid day on top of the 26-day base)
+  const otCount = [...overtimeDays.values()].filter(t => t === 'full').length;
+  const presentCount = Math.max(0, AEEPL_DIVISOR - absentDays.size + otCount);
 
   const toggleDay = (day) => {
     setAbsentDays((prev) => {
@@ -54,22 +49,21 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
     });
   };
 
-  // Cycles: none → half → full → none
+  // Cycles: none → full → none  (no half-day for AEEPL)
   const toggleOvertime = (day) => {
     setOvertimeDays((prev) => {
       const next = new Map(prev);
-      const cur = next.get(day);
-      if (!cur) next.set(day, 'half');
-      else if (cur === 'half') next.set(day, 'full');
-      else next.delete(day);
+      if (next.has(day)) next.delete(day);
+      else next.set(day, 'full');
       return next;
     });
   };
 
   const handleApply = () => {
-    const absentArr = [...absentDays].sort((a, b) => a - b);
+    const absentArr  = [...absentDays].sort((a, b) => a - b);
     const overtimeArr = [...overtimeDays.entries()];
-    const daysPresent = Math.max(0, workingDays - absentArr.length + overtimeBonus);
+    // AEEPL: paid days = 26 − absents + full-day OT (never below 0)
+    const daysPresent = Math.max(0, AEEPL_DIVISOR - absentArr.length + otCount);
     setAttendance((prev) => ({
       ...prev,
       [mKey]: {
@@ -124,18 +118,14 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
             Sun (off)
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(255,105,180,0.22)', borderTop: '2.5px solid #ff69b4', borderBottom: '2.5px solid #ff69b4', borderLeft: '2.5px solid transparent', borderRight: '2.5px solid transparent', boxShadow: '0 2px 6px rgba(255,105,180,0.5)', display: 'inline-block' }} />
-            ½ OT
-          </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(255,105,180,0.28)', border: '2.5px solid #ff69b4', boxShadow: '0 0 6px rgba(255,105,180,0.65)', display: 'inline-block' }} />
-            1d OT
+            OT (+1d)
           </span>
         </div>
 
         {/* OT hint */}
         <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 12, letterSpacing: '0.02em' }}>
-          Click Sun / Holiday to cycle overtime: none → ½ day → full day → none
+          Click Sun / Holiday to toggle full-day overtime (+1 paid day)
         </div>
 
         {/* Day-of-week headers + Day grid */}
@@ -174,22 +164,10 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
             let cellStyle, onClick, title;
 
             if (isSun || isHoliday) {
-              const otNext = !ot ? '½ day' : ot === 'half' ? 'full day' : 'remove';
-              title = `${isSun ? 'Sunday' : 'Holiday'} · click to mark OT: ${otNext}`;
+              title = `${isSun ? 'Sunday' : 'Holiday'} · click to ${ot ? 'remove' : 'add'} full-day OT`;
               onClick = () => toggleOvertime(day);
 
-              if (ot === 'half') {
-                cellStyle = {
-                  borderTop: '2.5px solid #ff69b4',
-                  borderBottom: '2.5px solid #ff69b4',
-                  borderLeft: '2.5px solid transparent',
-                  borderRight: '2.5px solid transparent',
-                  boxShadow: '0 3px 9px rgba(255,105,180,0.6), 0 -3px 9px rgba(255,105,180,0.6)',
-                  background: 'rgba(255,105,180,0.22)',
-                  color: '#ff69b4',
-                  cursor: 'pointer',
-                };
-              } else if (ot === 'full') {
+              if (ot === 'full') {
                 cellStyle = {
                   border: '2.5px solid #ff69b4',
                   boxShadow: '0 0 11px rgba(255,105,180,0.75), inset 0 0 5px rgba(255,105,180,0.12)',
@@ -247,10 +225,8 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
                 }}
               >
                 <span>{day}</span>
-                {ot && (
-                  <span style={{ fontSize: 8, lineHeight: 1, fontWeight: 800, letterSpacing: '0.02em' }}>
-                    {ot === 'half' ? '½' : '+1'}
-                  </span>
+                {ot === 'full' && (
+                  <span style={{ fontSize: 8, lineHeight: 1, fontWeight: 800, letterSpacing: '0.02em' }}>+1</span>
                 )}
               </button>
             );
@@ -263,9 +239,9 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
             <span style={{ color: '#e0806e', fontWeight: 600 }}>{absentDays.size} absent</span>
             <span style={{ color: 'var(--text-faint)', margin: '0 5px' }}>·</span>
             <span style={{ color: '#7ec478', fontWeight: 600 }}>{presentCount} present</span>
-            {overtimeBonus > 0 && (
+            {otCount > 0 && (
               <span style={{ color: '#ff69b4', fontWeight: 600, marginLeft: 5 }}>
-                (+{overtimeBonus}d OT)
+                (+{otCount}d OT)
               </span>
             )}
           </div>
@@ -303,7 +279,8 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
   const visibleFirms = filter === 'all' ? firms : [filter];
 
   const updatePresent = (empId, value) => {
-    const n = Math.max(0, Math.min(total, Number(value) || 0));
+    // AEEPL: manual input capped at 26 (the fixed divisor)
+    const n = Math.max(0, Math.min(AEEPL_DIVISOR, Number(value) || 0));
     setAttendance((prev) => ({
       ...prev,
       [mKey]: { ...(prev[mKey] || {}), [empId]: n },
@@ -311,9 +288,9 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
   };
 
   const markAllFullAttendance = () => {
-    const maxDays = total - publicHols;
     const next = {};
-    employees.forEach((e) => { next[e.id] = maxDays; });
+    // AEEPL full attendance = 26 paid days (no absences, no OT)
+    employees.forEach((e) => { next[e.id] = AEEPL_DIVISOR; });
     setAttendance((prev) => ({ ...prev, [mKey]: next }));
   };
 
@@ -333,7 +310,7 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
           <div>
             <h2>Attendance · {MONTH_NAMES[monthIdx]} {year}</h2>
             <div className="panel-title-sub">
-              — {total} DAYS · {publicHols} HOLIDAYS · MAX WORKING = {total - publicHols}
+              — 26-DAY POLICY · {publicHols} OBSERVED HOLIDAY{publicHols !== 1 ? 'S' : ''} · PER-DAY = SALARY ÷ 26
             </div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
@@ -351,9 +328,9 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
         </div>
 
         <div className="info-note">
-          Enter <strong>Days Present</strong> for each employee, or click the <CalendarDays size={12} style={{ verticalAlign: 'middle' }} /> calendar icon to mark individual days. Salary, ESI, bonus and net-payable
-          recalculate instantly. Holidays are auto-counted from the Holiday Calendar; absent-days =
-          <span className="mono"> total − present − holidays</span>.
+          Enter <strong>Days Present</strong> manually (max 26), or click the <CalendarDays size={12} style={{ verticalAlign: 'middle' }} /> calendar icon to mark individual absent days.
+          Formula: <span className="mono">Gross = (Salary ÷ 26) × (26 − Absent + OT days)</span>.
+          Company-observed holidays are paid; Sundays are unpaid rest — neither counts as absent.
         </div>
       </div>
 
@@ -444,7 +421,7 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
                             onChange={(e) => updatePresent(r.employee.id, e.target.value)}
                           />
                           <span className="faint mono" style={{ fontSize: 10, marginLeft: 4 }}>
-                            /{total}
+                            /{AEEPL_DIVISOR}
                           </span>
                         </td>
                         <td className="num" style={{ color: r.daysAbsent > 0 ? 'var(--danger)' : 'var(--text-faint)' }}>

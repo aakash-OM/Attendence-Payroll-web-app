@@ -33,20 +33,17 @@ export const formatINRExact = (n) => {
   return '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-/**
- * Compute payroll for a single employee for a given month.
- * Logic mirrors the original Excel workbook:
- *  - Per-day salary = monthly_salary / total_days_in_month
- *  - Days absent   = total_days − days_present − public_holidays (floored at 0)
- *  - Gross after absent deduction = per_day * (total_days − days_absent)
- *  - ESI (if applicable) deducted at 0.75%
- *  - Bonus (if applicable) added at 8.33%
- */
-export function computeEmployeePayroll({ employee, daysPresent, totalDays, publicHolidays }) {
-  const perDay = employee.salary / totalDays;
-  const daysAbsent = Math.max(0, totalDays - daysPresent - publicHolidays);
-  const paidDays = totalDays - daysAbsent;
-  const grossAfterAbsent = perDay * paidDays;
+// AEEPL policy: fixed 26-day divisor every month.
+// Per-day = salary / 26.
+// Gross   = per-day × (26 − absentDays + otDays).
+// Observed company holidays are paid (not counted as absent).
+// Sundays are unpaid rest — excluded from both absent count and paid days.
+// OT on Sundays / holidays is paid at the same per-day rate (full day only).
+export const AEEPL_DIVISOR = 26;
+
+export function computeEmployeePayroll({ employee, daysPresent, daysAbsent }) {
+  const perDay = employee.salary / AEEPL_DIVISOR;
+  const grossAfterAbsent = perDay * daysPresent;
 
   const esiEligible = employee.salary <= ESI_THRESHOLD;
   const esiDeduct = esiEligible ? grossAfterAbsent * ESI_EMPLOYEE_RATE : 0;
@@ -60,7 +57,7 @@ export function computeEmployeePayroll({ employee, daysPresent, totalDays, publi
   return {
     perDay,
     daysAbsent,
-    paidDays,
+    paidDays: daysPresent,
     grossAfterAbsent,
     esiDeduct,
     afterEsi,
@@ -79,10 +76,28 @@ export function computeMonthPayroll({ employees, attendance, holidays, year, mon
   const monthAtt = attendance[mKey] || {};
 
   const rows = employees.map((emp) => {
-    const daysPresent = monthAtt[emp.id] != null
-      ? monthAtt[emp.id]
-      : (totalDays - publicHolidays); // default = present every working day
-    const calc = computeEmployeePayroll({ employee: emp, daysPresent, totalDays, publicHolidays });
+    const absentArr = monthAtt[`d${emp.id}`];          // set when calendar was used
+    const otArr     = monthAtt[`ot${emp.id}`] || [];   // [[dayNum, 'full'], ...]
+
+    // Full-day OT entries only (AEEPL has no half-day OT)
+    const otCount = otArr.filter(([, t]) => t === 'full').length;
+
+    let daysPresent, daysAbsent;
+    if (absentArr !== undefined) {
+      // Calendar path: derive directly from the stored absent list
+      daysAbsent  = absentArr.length;
+      daysPresent = Math.max(0, AEEPL_DIVISOR - daysAbsent + otCount);
+    } else if (monthAtt[emp.id] != null) {
+      // Manual input path: user typed a number directly
+      daysPresent = monthAtt[emp.id];
+      daysAbsent  = Math.max(0, AEEPL_DIVISOR - daysPresent);
+    } else {
+      // No data yet: default to full salary (zero absences)
+      daysPresent = AEEPL_DIVISOR;
+      daysAbsent  = 0;
+    }
+
+    const calc = computeEmployeePayroll({ employee: emp, daysPresent, daysAbsent });
     return { employee: emp, daysPresent, ...calc };
   });
 

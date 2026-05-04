@@ -433,7 +433,7 @@ export default function App() {
       {tab === 'overview'    && <Overview           employees={employees} holidays={holidays} attendance={attendance} year={year} monthIdx={monthIdx} />}
       {tab === 'attendance'  && <Attendance         employees={employees} holidays={holidays} attendance={attendance} setAttendance={saveAttendance} year={year} monthIdx={monthIdx} />}
       {tab === 'employees'   && <Employees          employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} documents={documents} setDocuments={saveDocuments} companyId={companyId} />}
-      {tab === 'components'  && <PayrollComponents  employees={employees} year={year} components={components} setComponents={saveComponents} />}
+      {tab === 'components'  && <PayrollComponents  employees={employees} year={year} attendance={attendance} components={components} setComponents={saveComponents} />}
       {tab === 'holidays'    && <Holidays           holidays={holidays} setHolidays={saveHolidays} year={year} />}
 
       <footer style={{ marginTop: 60, paddingTop: 20, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', color: 'var(--text-faint)', fontSize: 12, flexWrap: 'wrap', gap: 12 }}>

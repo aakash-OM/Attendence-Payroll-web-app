@@ -4,12 +4,29 @@ import {
   computeMonthPayroll, daysInMonth, monthKey, MONTH_NAMES, formatINR, formatINRExact,
 } from '../payroll';
 
-function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey, attendance, setAttendance, onClose }) {
+function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, attendance, setAttendance, onClose }) {
   const absentKey = `d${empId}`;
   const [absentDays, setAbsentDays] = useState(() => new Set(attendance[mKey]?.[absentKey] || []));
 
   const firstDayOfWeek = new Date(year, monthIdx, 1).getDay(); // 0=Sun … 6=Sat
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+  // Day-numbers (1-based) in this month that are observed company holidays
+  const holidayDayNums = new Set(
+    holidays
+      .filter((h) => {
+        if (!h.observed) return false;
+        const d = new Date(h.date);
+        return d.getFullYear() === year && d.getMonth() === monthIdx;
+      })
+      .map((h) => new Date(h.date).getDate()),
+  );
+
+  // Working days = exclude Sundays and observed holidays
+  const workingDays = Array.from({ length: total }, (_, i) => i + 1).filter((day) => {
+    const dow = (firstDayOfWeek + day - 1) % 7;
+    return dow !== 0 && !holidayDayNums.has(day);
+  }).length;
 
   const toggleDay = (day) => {
     setAbsentDays((prev) => {
@@ -21,7 +38,7 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
 
   const handleApply = () => {
     const absentArr = [...absentDays].sort((a, b) => a - b);
-    const daysPresent = Math.max(0, total - publicHols - absentArr.length);
+    const daysPresent = Math.max(0, workingDays - absentArr.length);
     setAttendance((prev) => ({
       ...prev,
       [mKey]: { ...(prev[mKey] || {}), [empId]: daysPresent, [absentKey]: absentArr },
@@ -29,7 +46,7 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
     onClose();
   };
 
-  const presentCount = Math.max(0, total - publicHols - absentDays.size);
+  const presentCount = Math.max(0, workingDays - absentDays.size);
 
   return (
     <div
@@ -65,18 +82,18 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
             Absent
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 11, height: 11, borderRadius: 3, border: '2px solid #ff9500', boxShadow: '0 0 5px rgba(255,149,0,0.6)', display: 'inline-block' }} />
-            Sat
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(255,149,0,0.22)', border: '2px solid #ff9500', boxShadow: '0 0 5px rgba(255,149,0,0.55)', display: 'inline-block' }} />
+            Holiday
           </span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-            <span style={{ width: 11, height: 11, borderRadius: 3, border: '2.5px solid #ff3b30', boxShadow: '0 0 6px rgba(255,59,48,0.65)', display: 'inline-block' }} />
-            Sun
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(212,106,90,0.38)', border: '2.5px solid #ff3b30', boxShadow: '0 0 6px rgba(255,59,48,0.65)', display: 'inline-block' }} />
+            Sun (off)
           </span>
         </div>
 
         {/* Day-of-week headers + Day grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, marginBottom: 18 }}>
-          {/* Day name row */}
+          {/* Day name row — only Sunday gets the red highlight */}
           {DAY_NAMES.map((d, i) => (
             <div
               key={d}
@@ -86,12 +103,8 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
                 fontWeight: 700,
                 letterSpacing: '0.04em',
                 paddingBottom: 5,
-                color: i === 0 ? '#ff3b30' : i === 6 ? '#ff9500' : 'var(--text-faint)',
-                textShadow: i === 0
-                  ? '0 0 8px rgba(255,59,48,0.7)'
-                  : i === 6
-                    ? '0 0 8px rgba(255,149,0,0.7)'
-                    : 'none',
+                color: i === 0 ? '#ff3b30' : 'var(--text-faint)',
+                textShadow: i === 0 ? '0 0 8px rgba(255,59,48,0.7)' : 'none',
               }}
             >
               {d}
@@ -107,38 +120,52 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
           {Array.from({ length: total }, (_, i) => i + 1).map((day) => {
             const absent = absentDays.has(day);
             const dayOfWeek = (firstDayOfWeek + day - 1) % 7;
-            const isSat = dayOfWeek === 6;
             const isSun = dayOfWeek === 0;
+            const isHoliday = holidayDayNums.has(day);
 
-            let border, boxShadow;
-            if (isSat) {
-              border = '2px solid #ff9500';
-              boxShadow = '0 0 7px rgba(255,149,0,0.6), inset 0 0 4px rgba(255,149,0,0.08)';
-            } else if (isSun) {
+            let border, boxShadow, background, color, cursor, onClick, title;
+
+            if (isSun) {
               border = '2.5px solid #ff3b30';
               boxShadow = '0 0 9px rgba(255,59,48,0.7), inset 0 0 4px rgba(255,59,48,0.1)';
+              background = 'rgba(212,106,90,0.32)';
+              color = '#e0806e';
+              cursor = 'default';
+              onClick = undefined;
+              title = 'Sunday — weekly off';
+            } else if (isHoliday) {
+              border = '2px solid #ff9500';
+              boxShadow = '0 0 8px rgba(255,149,0,0.65), inset 0 0 4px rgba(255,149,0,0.1)';
+              background = 'rgba(255,149,0,0.18)';
+              color = '#ffaa33';
+              cursor = 'default';
+              onClick = undefined;
+              title = 'Company holiday — not counted as absent';
             } else {
               border = absent ? '1.5px solid rgba(212,106,90,0.65)' : '1.5px solid rgba(111,174,106,0.5)';
               boxShadow = 'none';
+              background = absent ? 'rgba(212,106,90,0.32)' : 'rgba(111,174,106,0.25)';
+              color = absent ? '#e0806e' : '#7ec478';
+              cursor = 'pointer';
+              onClick = () => toggleDay(day);
+              title = absent ? 'Click to mark present' : 'Click to mark absent';
             }
 
             return (
               <button
                 key={day}
-                onClick={() => toggleDay(day)}
-                title={absent ? 'Click to mark present' : 'Click to mark absent'}
+                onClick={onClick}
+                title={title}
                 style={{
                   padding: '8px 0',
                   borderRadius: 7,
                   border,
                   boxShadow,
-                  background: absent
-                    ? 'rgba(212,106,90,0.32)'
-                    : 'rgba(111,174,106,0.25)',
-                  color: absent ? '#e0806e' : '#7ec478',
+                  background,
+                  color,
                   fontWeight: 700,
                   fontSize: 13,
-                  cursor: 'pointer',
+                  cursor,
                   lineHeight: 1,
                   transition: 'background 0.12s',
                 }}
@@ -389,7 +416,7 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
           year={year}
           monthIdx={monthIdx}
           total={total}
-          publicHols={publicHols}
+          holidays={holidays}
           mKey={mKey}
           attendance={attendance}
           setAttendance={setAttendance}

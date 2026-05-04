@@ -22,6 +22,16 @@ function loadUI() {
   try { return JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch { return {}; }
 }
 
+// Normalize both old { companyId, companyName } and new { firms } profile formats
+function normalizeFirms(profile) {
+  if (!profile) return [];
+  if (profile.firms) return profile.firms;
+  if (profile.companyId && profile.companyName) {
+    return [{ id: profile.companyId, name: profile.companyName }];
+  }
+  return [];
+}
+
 // authStatus states:
 //   'loading'     — waiting for Firebase Auth to resolve
 //   'logged-out'  — no authenticated user
@@ -32,10 +42,12 @@ export default function App() {
   const [authStatus,   setAuthStatus]   = useState('loading');
   const [firebaseUser, setFirebaseUser] = useState(null);
   const [userProfile,  setUserProfile]  = useState(null);
+  const [activeFirmId, setActiveFirmId] = useState(() => loadUI().activeFirmId || null);
 
-  // companyId is always the Firebase Auth UID — zero collision, simple rules
-  const companyId   = firebaseUser?.uid ?? null;
-  const companyName = userProfile?.companyName ?? 'Payroll Dashboard';
+  const firms       = normalizeFirms(userProfile);
+  const activeFirm  = firms.find((f) => f.id === activeFirmId) ?? firms[0] ?? null;
+  const companyId   = activeFirm?.id ?? null;
+  const companyName = activeFirm?.name ?? 'Payroll Dashboard';
 
   // ── App data ──────────────────────────────────────────────────────────────
   const ui = loadUI();
@@ -55,13 +67,19 @@ export default function App() {
       if (!user) {
         setFirebaseUser(null);
         setUserProfile(null);
+        setActiveFirmId(null);
         setAuthStatus('logged-out');
         return;
       }
       setFirebaseUser(user);
       const snap = await getDoc(doc(db, 'users', user.uid));
       if (snap.exists()) {
-        setUserProfile(snap.data());
+        const profile = snap.data();
+        setUserProfile(profile);
+        const f        = normalizeFirms(profile);
+        const savedId  = loadUI().activeFirmId;
+        const validId  = f.find((firm) => firm.id === savedId) ? savedId : f[0]?.id ?? null;
+        setActiveFirmId(validId);
         setAuthStatus('ready');
       } else {
         setUserProfile(null);
@@ -110,8 +128,8 @@ export default function App() {
 
   // ── Persist UI nav state per-browser ─────────────────────────────────────
   useEffect(() => {
-    localStorage.setItem(UI_KEY, JSON.stringify({ year, monthIdx }));
-  }, [year, monthIdx]);
+    localStorage.setItem(UI_KEY, JSON.stringify({ year, monthIdx, activeFirmId }));
+  }, [year, monthIdx, activeFirmId]);
 
   // ── Save wrappers (write local + Firestore) ───────────────────────────────
   const base = (key) => doc(db, 'companies', companyId, 'payroll', key);
@@ -135,6 +153,16 @@ export default function App() {
     const next = typeof val === 'function' ? val(documents) : val;
     setDocuments(next);
     await setDoc(base('documents'), { map: next });
+  };
+
+  // ── Firm switching ────────────────────────────────────────────────────────
+  const switchFirm = (firmId) => {
+    setActiveFirmId(firmId);
+    setEmployees(null);
+    setHolidays(null);
+    setAttendance(null);
+    setDocuments(null);
+    setLoading(true);
   };
 
   // ── Month navigation ──────────────────────────────────────────────────────
@@ -284,7 +312,12 @@ export default function App() {
   if (authStatus === 'needs-setup') return (
     <CompanySetup
       user={firebaseUser}
-      onComplete={(profile) => { setUserProfile(profile); setAuthStatus('ready'); }}
+      onComplete={(profile) => {
+        setUserProfile(profile);
+        const f = normalizeFirms(profile);
+        setActiveFirmId(f[0]?.id ?? null);
+        setAuthStatus('ready');
+      }}
     />
   );
   if (loading) return <Spinner label={`Loading ${companyName}…`} />;
@@ -301,7 +334,26 @@ export default function App() {
     <div className="app">
       <div className="topbar">
         <div className="brand">
-          <div className="brand-mark">{companyName}</div>
+          <div className="brand-mark">
+            {firms.length > 1 ? (
+              <select
+                value={activeFirmId ?? ''}
+                onChange={(e) => switchFirm(e.target.value)}
+                style={{
+                  background: 'transparent', border: 'none', outline: 'none',
+                  color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit',
+                  letterSpacing: 'inherit', textTransform: 'inherit',
+                  cursor: 'pointer', padding: 0,
+                }}
+              >
+                {firms.map((f) => (
+                  <option key={f.id} value={f.id}>{f.name}</option>
+                ))}
+              </select>
+            ) : (
+              companyName
+            )}
+          </div>
           <h1>Payroll & <em>Attendance</em></h1>
           <div className="brand-sub">
             Interactive payroll dashboard · {employees.length} employees · {MONTH_NAMES[monthIdx]} {year}

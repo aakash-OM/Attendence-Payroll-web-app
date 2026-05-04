@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import {
-  LayoutDashboard, CalendarCheck, Users, CalendarRange,
+  LayoutDashboard, CalendarCheck, Users, CalendarRange, Layers,
   Download, Upload, ChevronLeft, ChevronRight, Zap, LogOut,
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
@@ -13,9 +13,10 @@ import { MONTH_NAMES, computeMonthPayroll } from './payroll';
 import Overview    from './pages/Overview';
 import Attendance  from './pages/Attendance';
 import Employees   from './pages/Employees';
-import Holidays    from './pages/Holidays';
-import Login       from './pages/Login';
-import CompanySetup from './pages/CompanySetup';
+import Holidays          from './pages/Holidays';
+import PayrollComponents, { DEFAULT_COMPONENTS } from './pages/PayrollComponents';
+import Login              from './pages/Login';
+import CompanySetup       from './pages/CompanySetup';
 
 const UI_KEY = 'payroll-ui';
 function loadUI() {
@@ -51,10 +52,11 @@ export default function App() {
 
   // ── App data ──────────────────────────────────────────────────────────────
   const ui = loadUI();
-  const [employees,  setEmployees]  = useState(null);
-  const [holidays,   setHolidays]   = useState(null);
-  const [attendance, setAttendance] = useState(null);
-  const [documents,  setDocuments]  = useState(null);
+  const [employees,   setEmployees]   = useState(null);
+  const [holidays,    setHolidays]    = useState(null);
+  const [attendance,  setAttendance]  = useState(null);
+  const [documents,   setDocuments]   = useState(null);
+  const [components,  setComponents]  = useState(null);
   const [year,       setYear]       = useState(ui.year     || 2026);
   const [monthIdx,   setMonthIdx]   = useState(ui.monthIdx ?? 2);
   const [loading,    setLoading]    = useState(true);
@@ -93,9 +95,9 @@ export default function App() {
     if (authStatus !== 'ready' || !companyId) return;
 
     setLoading(true);
-    const loaded = { emp: false, hol: false, att: false, doc: false };
+    const loaded = { emp: false, hol: false, att: false, doc: false, comp: false };
     const check  = () => {
-      if (loaded.emp && loaded.hol && loaded.att && loaded.doc) setLoading(false);
+      if (loaded.emp && loaded.hol && loaded.att && loaded.doc && loaded.comp) setLoading(false);
     };
 
     const base = (key) => doc(db, 'companies', companyId, 'payroll', key);
@@ -120,6 +122,11 @@ export default function App() {
         if (snap.exists()) { setDocuments(snap.data().map); }
         else { await setDoc(base('documents'), { map: {} }); }
         loaded.doc = true; check();
+      }),
+      onSnapshot(base('components'), async (snap) => {
+        if (snap.exists()) { setComponents(snap.data().map); }
+        else { await setDoc(base('components'), { map: DEFAULT_COMPONENTS }); setComponents(DEFAULT_COMPONENTS); }
+        loaded.comp = true; check();
       }),
     ];
 
@@ -149,10 +156,15 @@ export default function App() {
     setAttendance(next);
     await setDoc(base('attendance'), { map: next });
   };
-  const saveDocuments  = async (val) => {
+  const saveDocuments   = async (val) => {
     const next = typeof val === 'function' ? val(documents) : val;
     setDocuments(next);
     await setDoc(base('documents'), { map: next });
+  };
+  const saveComponents  = async (val) => {
+    const next = typeof val === 'function' ? val(components) : val;
+    setComponents(next);
+    await setDoc(base('components'), { map: next });
   };
 
   // ── Firm switching ────────────────────────────────────────────────────────
@@ -162,6 +174,7 @@ export default function App() {
     setHolidays(null);
     setAttendance(null);
     setDocuments(null);
+    setComponents(null);
     setLoading(true);
   };
 
@@ -324,10 +337,11 @@ export default function App() {
 
   // ── Dashboard ─────────────────────────────────────────────────────────────
   const tabs = [
-    { id: 'overview',   label: 'Overview',   icon: <LayoutDashboard size={14} /> },
-    { id: 'attendance', label: 'Attendance', icon: <CalendarCheck   size={14} /> },
-    { id: 'employees',  label: 'Employees',  icon: <Users           size={14} /> },
-    { id: 'holidays',   label: 'Calendar',   icon: <CalendarRange   size={14} /> },
+    { id: 'overview',    label: 'Overview',    icon: <LayoutDashboard size={14} /> },
+    { id: 'attendance',  label: 'Attendance',  icon: <CalendarCheck   size={14} /> },
+    { id: 'employees',   label: 'Employees',   icon: <Users           size={14} /> },
+    { id: 'components',  label: 'Components',  icon: <Layers          size={14} /> },
+    { id: 'holidays',    label: 'Calendar',    icon: <CalendarRange   size={14} /> },
   ];
 
   return (
@@ -416,10 +430,11 @@ export default function App() {
         ))}
       </div>
 
-      {tab === 'overview'   && <Overview   employees={employees} holidays={holidays} attendance={attendance} year={year} monthIdx={monthIdx} />}
-      {tab === 'attendance' && <Attendance employees={employees} holidays={holidays} attendance={attendance} setAttendance={saveAttendance} year={year} monthIdx={monthIdx} />}
-      {tab === 'employees'  && <Employees  employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} documents={documents} setDocuments={saveDocuments} companyId={companyId} />}
-      {tab === 'holidays'   && <Holidays   holidays={holidays} setHolidays={saveHolidays} year={year} />}
+      {tab === 'overview'    && <Overview           employees={employees} holidays={holidays} attendance={attendance} year={year} monthIdx={monthIdx} />}
+      {tab === 'attendance'  && <Attendance         employees={employees} holidays={holidays} attendance={attendance} setAttendance={saveAttendance} year={year} monthIdx={monthIdx} />}
+      {tab === 'employees'   && <Employees          employees={employees} setEmployees={saveEmployees} attendance={attendance} setAttendance={saveAttendance} documents={documents} setDocuments={saveDocuments} companyId={companyId} />}
+      {tab === 'components'  && <PayrollComponents  employees={employees} year={year} components={components} setComponents={saveComponents} />}
+      {tab === 'holidays'    && <Holidays           holidays={holidays} setHolidays={saveHolidays} year={year} />}
 
       <footer style={{ marginTop: 60, paddingTop: 20, borderTop: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', color: 'var(--text-faint)', fontSize: 12, flexWrap: 'wrap', gap: 12 }}>
         <span>

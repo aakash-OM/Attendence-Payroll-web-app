@@ -8,6 +8,9 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
   const absentKey = `d${empId}`;
   const [absentDays, setAbsentDays] = useState(() => new Set(attendance[mKey]?.[absentKey] || []));
 
+  const firstDayOfWeek = new Date(year, monthIdx, 1).getDay(); // 0=Sun … 6=Sat
+  const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
   const toggleDay = (day) => {
     setAbsentDays((prev) => {
       const next = new Set(prev);
@@ -52,7 +55,7 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
         </div>
 
         {/* Legend */}
-        <div style={{ display: 'flex', gap: 14, marginBottom: 14, fontSize: 11, color: 'var(--text-dim)' }}>
+        <div style={{ display: 'flex', gap: 12, marginBottom: 14, fontSize: 11, color: 'var(--text-dim)', flexWrap: 'wrap' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(111,174,106,0.35)', border: '1px solid rgba(111,174,106,0.55)', display: 'inline-block' }} />
             Present
@@ -61,12 +64,64 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
             <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(212,106,90,0.38)', border: '1px solid rgba(212,106,90,0.6)', display: 'inline-block' }} />
             Absent
           </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, border: '2px solid #ff9500', boxShadow: '0 0 5px rgba(255,149,0,0.6)', display: 'inline-block' }} />
+            Sat
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, border: '2.5px solid #ff3b30', boxShadow: '0 0 6px rgba(255,59,48,0.65)', display: 'inline-block' }} />
+            Sun
+          </span>
         </div>
 
-        {/* Day grid */}
+        {/* Day-of-week headers + Day grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, marginBottom: 18 }}>
+          {/* Day name row */}
+          {DAY_NAMES.map((d, i) => (
+            <div
+              key={d}
+              style={{
+                textAlign: 'center',
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                paddingBottom: 5,
+                color: i === 0 ? '#ff3b30' : i === 6 ? '#ff9500' : 'var(--text-faint)',
+                textShadow: i === 0
+                  ? '0 0 8px rgba(255,59,48,0.7)'
+                  : i === 6
+                    ? '0 0 8px rgba(255,149,0,0.7)'
+                    : 'none',
+              }}
+            >
+              {d}
+            </div>
+          ))}
+
+          {/* Offset blank cells so day 1 lands on the right column */}
+          {Array.from({ length: firstDayOfWeek }, (_, i) => (
+            <div key={`blank-${i}`} />
+          ))}
+
+          {/* Day buttons */}
           {Array.from({ length: total }, (_, i) => i + 1).map((day) => {
             const absent = absentDays.has(day);
+            const dayOfWeek = (firstDayOfWeek + day - 1) % 7;
+            const isSat = dayOfWeek === 6;
+            const isSun = dayOfWeek === 0;
+
+            let border, boxShadow;
+            if (isSat) {
+              border = '2px solid #ff9500';
+              boxShadow = '0 0 7px rgba(255,149,0,0.6), inset 0 0 4px rgba(255,149,0,0.08)';
+            } else if (isSun) {
+              border = '2.5px solid #ff3b30';
+              boxShadow = '0 0 9px rgba(255,59,48,0.7), inset 0 0 4px rgba(255,59,48,0.1)';
+            } else {
+              border = absent ? '1.5px solid rgba(212,106,90,0.65)' : '1.5px solid rgba(111,174,106,0.5)';
+              boxShadow = 'none';
+            }
+
             return (
               <button
                 key={day}
@@ -75,9 +130,8 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
                 style={{
                   padding: '8px 0',
                   borderRadius: 7,
-                  border: absent
-                    ? '1.5px solid rgba(212,106,90,0.65)'
-                    : '1.5px solid rgba(111,174,106,0.5)',
+                  border,
+                  boxShadow,
                   background: absent
                     ? 'rgba(212,106,90,0.32)'
                     : 'rgba(111,174,106,0.25)',
@@ -86,7 +140,7 @@ function CalendarModal({ empId, empName, year, monthIdx, total, publicHols, mKey
                   fontSize: 13,
                   cursor: 'pointer',
                   lineHeight: 1,
-                  transition: 'background 0.12s, border-color 0.12s',
+                  transition: 'background 0.12s',
                 }}
               >
                 {day}

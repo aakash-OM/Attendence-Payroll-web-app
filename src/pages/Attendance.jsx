@@ -6,12 +6,12 @@ import {
 
 function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, attendance, setAttendance, onClose }) {
   const absentKey = `d${empId}`;
-  const [absentDays, setAbsentDays] = useState(() => new Set(attendance[mKey]?.[absentKey] || []));
+  const otKey = `ot${empId}`;
 
+  // Compute these before useState so they can be used in lazy initialisers
   const firstDayOfWeek = new Date(year, monthIdx, 1).getDay(); // 0=Sun … 6=Sat
   const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
-  // Day-numbers (1-based) in this month that are observed company holidays
   const holidayDayNums = new Set(
     holidays
       .filter((h) => {
@@ -22,11 +22,29 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
       .map((h) => new Date(h.date).getDate()),
   );
 
-  // Working days = exclude Sundays and observed holidays
+  const [absentDays, setAbsentDays] = useState(() => {
+    const saved = attendance[mKey]?.[absentKey] || [];
+    // Strip any previously-saved Sundays / holidays from absent list
+    return new Set(saved.filter((d) => {
+      const dow = (firstDayOfWeek + d - 1) % 7;
+      return dow !== 0 && !holidayDayNums.has(d);
+    }));
+  });
+
+  // overtimeDays: Map<dayNum, 'half' | 'full'>  — only valid on Sun / holidays
+  const [overtimeDays, setOvertimeDays] = useState(() => {
+    const saved = attendance[mKey]?.[otKey];
+    return saved ? new Map(saved) : new Map();
+  });
+
+  // Working days = all days minus Sundays minus observed holidays
   const workingDays = Array.from({ length: total }, (_, i) => i + 1).filter((day) => {
     const dow = (firstDayOfWeek + day - 1) % 7;
     return dow !== 0 && !holidayDayNums.has(day);
   }).length;
+
+  const overtimeBonus = [...overtimeDays.values()].reduce((s, t) => s + (t === 'half' ? 0.5 : 1), 0);
+  const presentCount = Math.max(0, workingDays - absentDays.size + overtimeBonus);
 
   const toggleDay = (day) => {
     setAbsentDays((prev) => {
@@ -36,17 +54,33 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
     });
   };
 
+  // Cycles: none → half → full → none
+  const toggleOvertime = (day) => {
+    setOvertimeDays((prev) => {
+      const next = new Map(prev);
+      const cur = next.get(day);
+      if (!cur) next.set(day, 'half');
+      else if (cur === 'half') next.set(day, 'full');
+      else next.delete(day);
+      return next;
+    });
+  };
+
   const handleApply = () => {
     const absentArr = [...absentDays].sort((a, b) => a - b);
-    const daysPresent = Math.max(0, workingDays - absentArr.length);
+    const overtimeArr = [...overtimeDays.entries()];
+    const daysPresent = Math.max(0, workingDays - absentArr.length + overtimeBonus);
     setAttendance((prev) => ({
       ...prev,
-      [mKey]: { ...(prev[mKey] || {}), [empId]: daysPresent, [absentKey]: absentArr },
+      [mKey]: {
+        ...(prev[mKey] || {}),
+        [empId]: daysPresent,
+        [absentKey]: absentArr,
+        [otKey]: overtimeArr,
+      },
     }));
     onClose();
   };
-
-  const presentCount = Math.max(0, workingDays - absentDays.size);
 
   return (
     <div
@@ -72,28 +106,41 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
         </div>
 
         {/* Legend */}
-        <div style={{ display: 'flex', gap: 12, marginBottom: 14, fontSize: 11, color: 'var(--text-dim)', flexWrap: 'wrap' }}>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+        <div style={{ display: 'flex', gap: 10, marginBottom: 8, fontSize: 11, color: 'var(--text-dim)', flexWrap: 'wrap' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(111,174,106,0.35)', border: '1px solid rgba(111,174,106,0.55)', display: 'inline-block' }} />
             Present
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(212,106,90,0.38)', border: '1px solid rgba(212,106,90,0.6)', display: 'inline-block' }} />
             Absent
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(255,149,0,0.22)', border: '2px solid #ff9500', boxShadow: '0 0 5px rgba(255,149,0,0.55)', display: 'inline-block' }} />
             Holiday
           </span>
-          <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(212,106,90,0.38)', border: '2.5px solid #ff3b30', boxShadow: '0 0 6px rgba(255,59,48,0.65)', display: 'inline-block' }} />
             Sun (off)
           </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(255,105,180,0.22)', borderTop: '2.5px solid #ff69b4', borderBottom: '2.5px solid #ff69b4', borderLeft: '2.5px solid transparent', borderRight: '2.5px solid transparent', boxShadow: '0 2px 6px rgba(255,105,180,0.5)', display: 'inline-block' }} />
+            ½ OT
+          </span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <span style={{ width: 11, height: 11, borderRadius: 3, background: 'rgba(255,105,180,0.28)', border: '2.5px solid #ff69b4', boxShadow: '0 0 6px rgba(255,105,180,0.65)', display: 'inline-block' }} />
+            1d OT
+          </span>
+        </div>
+
+        {/* OT hint */}
+        <div style={{ fontSize: 10, color: 'var(--text-faint)', marginBottom: 12, letterSpacing: '0.02em' }}>
+          Click Sun / Holiday to cycle overtime: none → ½ day → full day → none
         </div>
 
         {/* Day-of-week headers + Day grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, marginBottom: 18 }}>
-          {/* Day name row — only Sunday gets the red highlight */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 5, marginBottom: 16 }}>
+          {/* Day name row */}
           {DAY_NAMES.map((d, i) => (
             <div
               key={d}
@@ -111,7 +158,7 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
             </div>
           ))}
 
-          {/* Offset blank cells so day 1 lands on the right column */}
+          {/* Offset blank cells */}
           {Array.from({ length: firstDayOfWeek }, (_, i) => (
             <div key={`blank-${i}`} />
           ))}
@@ -122,33 +169,61 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
             const dayOfWeek = (firstDayOfWeek + day - 1) % 7;
             const isSun = dayOfWeek === 0;
             const isHoliday = holidayDayNums.has(day);
+            const ot = overtimeDays.get(day);
 
-            let border, boxShadow, background, color, cursor, onClick, title;
+            let cellStyle, onClick, title;
 
-            if (isSun) {
-              border = '2.5px solid #ff3b30';
-              boxShadow = '0 0 9px rgba(255,59,48,0.7), inset 0 0 4px rgba(255,59,48,0.1)';
-              background = 'rgba(212,106,90,0.32)';
-              color = '#e0806e';
-              cursor = 'default';
-              onClick = undefined;
-              title = 'Sunday — weekly off';
-            } else if (isHoliday) {
-              border = '2px solid #ff9500';
-              boxShadow = '0 0 8px rgba(255,149,0,0.65), inset 0 0 4px rgba(255,149,0,0.1)';
-              background = 'rgba(255,149,0,0.18)';
-              color = '#ffaa33';
-              cursor = 'default';
-              onClick = undefined;
-              title = 'Company holiday — not counted as absent';
+            if (isSun || isHoliday) {
+              const otNext = !ot ? '½ day' : ot === 'half' ? 'full day' : 'remove';
+              title = `${isSun ? 'Sunday' : 'Holiday'} · click to mark OT: ${otNext}`;
+              onClick = () => toggleOvertime(day);
+
+              if (ot === 'half') {
+                cellStyle = {
+                  borderTop: '2.5px solid #ff69b4',
+                  borderBottom: '2.5px solid #ff69b4',
+                  borderLeft: '2.5px solid transparent',
+                  borderRight: '2.5px solid transparent',
+                  boxShadow: '0 3px 9px rgba(255,105,180,0.6), 0 -3px 9px rgba(255,105,180,0.6)',
+                  background: 'rgba(255,105,180,0.22)',
+                  color: '#ff69b4',
+                  cursor: 'pointer',
+                };
+              } else if (ot === 'full') {
+                cellStyle = {
+                  border: '2.5px solid #ff69b4',
+                  boxShadow: '0 0 11px rgba(255,105,180,0.75), inset 0 0 5px rgba(255,105,180,0.12)',
+                  background: 'rgba(255,105,180,0.27)',
+                  color: '#ff69b4',
+                  cursor: 'pointer',
+                };
+              } else if (isSun) {
+                cellStyle = {
+                  border: '2.5px solid #ff3b30',
+                  boxShadow: '0 0 9px rgba(255,59,48,0.7), inset 0 0 4px rgba(255,59,48,0.1)',
+                  background: 'rgba(212,106,90,0.32)',
+                  color: '#e0806e',
+                  cursor: 'pointer',
+                };
+              } else {
+                cellStyle = {
+                  border: '2px solid #ff9500',
+                  boxShadow: '0 0 8px rgba(255,149,0,0.65), inset 0 0 4px rgba(255,149,0,0.1)',
+                  background: 'rgba(255,149,0,0.18)',
+                  color: '#ffaa33',
+                  cursor: 'pointer',
+                };
+              }
             } else {
-              border = absent ? '1.5px solid rgba(212,106,90,0.65)' : '1.5px solid rgba(111,174,106,0.5)';
-              boxShadow = 'none';
-              background = absent ? 'rgba(212,106,90,0.32)' : 'rgba(111,174,106,0.25)';
-              color = absent ? '#e0806e' : '#7ec478';
-              cursor = 'pointer';
               onClick = () => toggleDay(day);
               title = absent ? 'Click to mark present' : 'Click to mark absent';
+              cellStyle = {
+                border: absent ? '1.5px solid rgba(212,106,90,0.65)' : '1.5px solid rgba(111,174,106,0.5)',
+                boxShadow: 'none',
+                background: absent ? 'rgba(212,106,90,0.32)' : 'rgba(111,174,106,0.25)',
+                color: absent ? '#e0806e' : '#7ec478',
+                cursor: 'pointer',
+              };
             }
 
             return (
@@ -157,20 +232,26 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
                 onClick={onClick}
                 title={title}
                 style={{
-                  padding: '8px 0',
+                  padding: '6px 0 5px',
                   borderRadius: 7,
-                  border,
-                  boxShadow,
-                  background,
-                  color,
                   fontWeight: 700,
-                  fontSize: 13,
-                  cursor,
+                  fontSize: 12,
                   lineHeight: 1,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 2,
                   transition: 'background 0.12s',
+                  ...cellStyle,
                 }}
               >
-                {day}
+                <span>{day}</span>
+                {ot && (
+                  <span style={{ fontSize: 8, lineHeight: 1, fontWeight: 800, letterSpacing: '0.02em' }}>
+                    {ot === 'half' ? '½' : '+1'}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -180,13 +261,18 @@ function CalendarModal({ empId, empName, year, monthIdx, total, holidays, mKey, 
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ fontSize: 12 }}>
             <span style={{ color: '#e0806e', fontWeight: 600 }}>{absentDays.size} absent</span>
-            <span style={{ color: 'var(--text-faint)', margin: '0 6px' }}>·</span>
+            <span style={{ color: 'var(--text-faint)', margin: '0 5px' }}>·</span>
             <span style={{ color: '#7ec478', fontWeight: 600 }}>{presentCount} present</span>
+            {overtimeBonus > 0 && (
+              <span style={{ color: '#ff69b4', fontWeight: 600, marginLeft: 5 }}>
+                (+{overtimeBonus}d OT)
+              </span>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <button
               className="btn btn-sm btn-ghost"
-              onClick={() => setAbsentDays(new Set())}
+              onClick={() => { setAbsentDays(new Set()); setOvertimeDays(new Map()); }}
               style={{ fontSize: 11 }}
             >
               Clear all
@@ -314,7 +400,8 @@ export default function Attendance({ employees, holidays, attendance, setAttenda
                 </thead>
                 <tbody>
                   {rows.map((r, i) => {
-                    const hasCalDays = (attendance[mKey]?.[`d${r.employee.id}`] || []).length > 0;
+                    const hasCalDays = (attendance[mKey]?.[`d${r.employee.id}`] || []).length > 0
+                      || (attendance[mKey]?.[`ot${r.employee.id}`] || []).length > 0;
                     return (
                       <tr key={r.employee.id}>
                         <td className="faint mono">{i + 1}</td>

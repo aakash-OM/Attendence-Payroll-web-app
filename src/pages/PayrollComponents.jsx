@@ -45,7 +45,7 @@ function getDaysPresentForMonth(emp, attendance, year, mi) {
   const otCount   = otArr.filter(([, t]) => t === 'full').length;
   if (absentArr !== undefined) return Math.max(0, AEEPL_DIVISOR - absentArr.length + otCount);
   if (monthAtt[emp.id] != null) return Number(monthAtt[emp.id]);
-  return AEEPL_DIVISOR;
+  return null; // No attendance recorded yet → show —
 }
 
 function appliesToEmp(key, emp) {
@@ -103,9 +103,14 @@ export default function PayrollComponents({ employees, year, attendance, compone
         if (c.type === 'per_day') {
           const applicable = employees.filter(e => appliesToEmp(key, e));
           if (!applicable.length) return null;
-          const total = applicable.reduce((s, emp) =>
-            s + getDaysPresentForMonth(emp, attendance, year, mi) * Number(c.rate), 0);
-          return total > 0 ? total : null;
+          let hasData = false;
+          const total = applicable.reduce((s, emp) => {
+            const dp = getDaysPresentForMonth(emp, attendance, year, mi);
+            if (dp === null) return s;           // skip — no data recorded
+            hasData = true;
+            return s + dp * Number(c.rate);
+          }, 0);
+          return hasData ? total : null;
         } else {
           const applicable = employees.filter(e => appliesToEmp(key, e));
           const totalSal = applicable.reduce((s, e) => s + (Number(e.salary) || 0), 0);
@@ -126,6 +131,7 @@ export default function PayrollComponents({ employees, year, attendance, compone
           if (!c.enabled || !Number(c.rate) || !appliesToEmp(key, emp)) return null;
           if (c.type === 'per_day') {
             const dp = getDaysPresentForMonth(emp, attendance, year, mi);
+            if (dp === null) return null; // no attendance recorded → show —
             return dp * Number(c.rate);
           }
           const sal = Number(emp.salary) || 0;
